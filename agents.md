@@ -61,6 +61,20 @@ carrotcontext/
 - 前端: Vitest覆盖率 > 70%
 - E2E: 覆盖核心用户流程
 
+### 前端视觉设计规范
+
+采用现代 SaaS 科技风设计语言（参考 Notion/Linear 风格）：
+
+- **色彩体系**: 主背景 `bg-slate-50`，文字 `text-slate-800`/`text-slate-900`，副文本 `text-slate-500`
+- **圆角规范**: 卡片/按钮 `rounded-xl`，弹窗 `rounded-2xl`
+- **阴影层次**: 基础 `shadow-sm`，悬浮 `hover:shadow-md`，弹窗 `shadow-xl shadow-slate-200/50`
+- **边框**: 统一使用 `border-slate-100` 或 `border-slate-200/60`
+- **按钮**: 主按钮使用渐变 `bg-gradient-to-r from-blue-600 to-indigo-600`
+- **导航栏**: 毛玻璃效果 `bg-white/80 backdrop-blur-md`
+- **输入框**: 聚焦光晕 `focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500`
+- **图标**: 使用 lucide-react SVG 图标，文件类型用颜色区分
+- **动效**: `transition-all duration-200`，悬浮上移 `hover:-translate-y-0.5`
+
 ## 核心模块说明
 
 ### 认证模块 (auth)

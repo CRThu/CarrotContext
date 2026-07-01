@@ -9,7 +9,14 @@ interface MarkdownViewerProps {
 
 export default function MarkdownViewer({ content }: MarkdownViewerProps) {
   return (
-    <div className="prose prose-lg max-w-none">
+    <div className="prose prose-slate prose-lg max-w-none
+      prose-headings:font-semibold prose-headings:text-slate-900
+      prose-p:leading-relaxed prose-p:text-slate-700
+      prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
+      prose-code:text-slate-800 prose-code:bg-slate-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-sm prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
+      prose-pre:bg-slate-900 prose-pre:rounded-xl prose-pre:border prose-pre:border-slate-200
+      prose-th:text-slate-600 prose-td:text-slate-700
+    ">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeHighlight]}
@@ -26,9 +33,11 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
             }
             return (
               <div className="relative">
-                <div className="absolute top-2 right-2 text-xs text-gray-500 bg-gray-700 px-2 py-1 rounded">
-                  {match ? match[1] : ''}
-                </div>
+                {match && (
+                  <div className="absolute top-3 right-3 text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider z-10">
+                    {match[1]}
+                  </div>
+                )}
                 <code className={className} {...props}>
                   {children}
                 </code>
@@ -37,20 +46,20 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
           },
           table({ children, ...props }) {
             return (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200" {...props}>
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200" {...props}>
                   {children}
                 </table>
               </div>
             )
           },
           thead({ children, ...props }) {
-            return <thead className="bg-gray-50" {...props}>{children}</thead>
+            return <thead className="bg-slate-50" {...props}>{children}</thead>
           },
           th({ children, ...props }) {
             return (
               <th
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
                 {...props}
               >
                 {children}
@@ -59,7 +68,7 @@ export default function MarkdownViewer({ content }: MarkdownViewerProps) {
           },
           td({ children, ...props }) {
             return (
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900" {...props}>
+              <td className="px-4 py-3 text-sm text-slate-700" {...props}>
                 {children}
               </td>
             )

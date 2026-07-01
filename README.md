@@ -31,17 +31,23 @@
 
 ### 登录页面
 
+现代化登录卡片设计，搭配渐变按钮与柔和背景装饰。
+
 <div align="center">
 <img src="docs/images/login.png" alt="登录页面" width="600">
 </div>
 
-### 主页面
+### 知识库列表
+
+仪表盘式卡片布局，展示所有知识库概览信息。
 
 <div align="center">
-<img src="docs/images/dashboard.png" alt="主页面" width="600">
+<img src="docs/images/dashboard.png" alt="知识库列表" width="600">
 </div>
 
 ### 知识库详情
+
+Notion 风格的左右分栏布局，左侧文件目录树 + 右侧白纸画布。
 
 <div align="center">
 <img src="docs/images/knowledge-detail.png" alt="知识库详情" width="600">
@@ -49,20 +55,26 @@
 
 ### Markdown 预览
 
-<div align="center">
-<img src="docs/images/markdown-preview.png" alt="Markdown 预览" width="600">
-</div>
-
-### 代码编辑器
+支持表格、代码高亮等丰富内容的实时渲染预览。
 
 <div align="center">
-<img src="docs/images/code-editor.png" alt="代码编辑器" width="600">
+<img src="docs/images/markdown-preview.png" alt="Markdown预览" width="600">
 </div>
 
 ### 代码预览
 
+语法高亮的代码文件只读预览视图。
+
 <div align="center">
 <img src="docs/images/code-preview.png" alt="代码预览" width="600">
+</div>
+
+### 代码编辑器
+
+VSCode 风格的 Monaco Editor 代码编辑体验。
+
+<div align="center">
+<img src="docs/images/code-editor.png" alt="代码编辑器" width="600">
 </div>
 
 ## 🛠️ 技术栈

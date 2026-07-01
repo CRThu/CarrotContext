@@ -20,7 +20,7 @@ export default function CodeEditor({
   }
 
   return (
-    <div className="h-full border rounded-lg overflow-hidden">
+    <div className="h-full rounded-xl border border-slate-200 overflow-hidden shadow-sm">
       <Editor
         height="100%"
         language={language}
