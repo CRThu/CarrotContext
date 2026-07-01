@@ -43,10 +43,10 @@ export const api = {
   knowledge: {
     list: () => request<Knowledge[]>('/knowledge'),
     get: (id: string) => request<Knowledge>(`/knowledge/${id}`),
-    create: (name: string, description: string, tags: string[]) =>
+    create: (name: string, description: string, tags: string[], category: string = '默认') =>
       request<Knowledge>('/knowledge', {
         method: 'POST',
-        body: JSON.stringify({ name, description, tags }),
+        body: JSON.stringify({ name, description, tags, category }),
       }),
     update: (id: string, data: Partial<Knowledge>) =>
       request<Knowledge>(`/knowledge/${id}`, {

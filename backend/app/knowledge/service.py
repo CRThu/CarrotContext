@@ -22,12 +22,12 @@ def get_knowledge(knowledge_id: str) -> dict | None:
     return load_manifest(knowledge_id)
 
 
-def create_knowledge(knowledge_id: str, name: str, description: str, tags: list[str], created_by: str) -> dict:
+def create_knowledge(knowledge_id: str, name: str, description: str, tags: list[str], created_by: str, category: str = "默认") -> dict:
     knowledge_path = get_knowledge_path(knowledge_id)
     if knowledge_path.exists():
         raise ValueError("知识库已存在")
     knowledge_path.mkdir(parents=True, exist_ok=True)
-    return create_manifest(knowledge_id, name, description, tags, created_by)
+    return create_manifest(knowledge_id, name, description, tags, created_by, category)
 
 
 def update_knowledge(knowledge_id: str, updates: dict, updated_by: str) -> dict | None:

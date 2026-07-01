@@ -23,7 +23,7 @@ def save_manifest(knowledge_id: str, manifest: dict):
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 
-def create_manifest(knowledge_id: str, name: str, description: str, tags: list[str], created_by: str) -> dict:
+def create_manifest(knowledge_id: str, name: str, description: str, tags: list[str], created_by: str, category: str = "默认") -> dict:
     now = datetime.now(timezone.utc).isoformat()
     manifest = {
         "id": knowledge_id,
@@ -36,6 +36,7 @@ def create_manifest(knowledge_id: str, name: str, description: str, tags: list[s
         "tags": tags,
         "summary": "",
         "version": 1,
+        "category": category,
     }
     save_manifest(knowledge_id, manifest)
     return manifest

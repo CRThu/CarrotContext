@@ -6,6 +6,7 @@ class KnowledgeCreate(BaseModel):
     name: str
     description: str = ""
     tags: list[str] = []
+    category: str = "默认"
 
 
 class KnowledgeUpdate(BaseModel):
@@ -13,6 +14,7 @@ class KnowledgeUpdate(BaseModel):
     description: str | None = None
     tags: list[str] | None = None
     summary: str | None = None
+    category: str | None = None
 
 
 class KnowledgeResponse(BaseModel):
@@ -26,6 +28,7 @@ class KnowledgeResponse(BaseModel):
     tags: list[str]
     summary: str
     version: int
+    category: str = "默认"
 
 
 class TreeNode(BaseModel):

@@ -5,6 +5,7 @@ interface CodeEditorProps {
   onChange: (value: string) => void
   language?: string
   readOnly?: boolean
+  height?: string
 }
 
 export default function CodeEditor({
@@ -12,6 +13,7 @@ export default function CodeEditor({
   onChange,
   language = 'plaintext',
   readOnly = false,
+  height = '100%',
 }: CodeEditorProps) {
   const handleChange = (value: string | undefined) => {
     if (value !== undefined) {
@@ -20,7 +22,7 @@ export default function CodeEditor({
   }
 
   return (
-    <div className="h-full rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+    <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm" style={{ height }}>
       <Editor
         height="100%"
         language={language}

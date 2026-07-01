@@ -164,7 +164,7 @@ export default function KnowledgePage() {
 
         {/* Canvas */}
         <main className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="max-w-4xl mx-auto p-8">
+          <div className="max-w-4xl mx-auto p-8 h-full">
             {/* Breadcrumb */}
             {selectedFile && (
               <nav className="flex items-center gap-1.5 text-xs text-slate-400 mb-6 animate-fade-in">
@@ -181,7 +181,7 @@ export default function KnowledgePage() {
             )}
 
             {/* Content Canvas Card */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 min-h-[calc(100vh-180px)]">
+            <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm p-8 ${isEditing ? 'h-[calc(100vh-180px)]' : 'min-h-[calc(100vh-180px)]'}`}>
               {error && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm animate-slide-up">
                   {error}
@@ -202,6 +202,7 @@ export default function KnowledgePage() {
                   content={editContent}
                   onChange={setEditContent}
                   language={isMarkdown(selectedFile) ? 'markdown' : 'plaintext'}
+                  height="100%"
                 />
               ) : fileContent && isMarkdown(selectedFile) ? (
                 <MarkdownViewer content={fileContent.content} />

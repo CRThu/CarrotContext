@@ -17,6 +17,7 @@ export interface Knowledge {
   tags: string[]
   summary: string
   version: number
+  category: string
 }
 
 export interface TreeNode {

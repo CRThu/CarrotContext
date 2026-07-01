@@ -32,7 +32,7 @@ async def create_knowledge_api(
     knowledge_id = knowledge.name.lower().replace(" ", "-")
     try:
         return create_knowledge(
-            knowledge_id, knowledge.name, knowledge.description, knowledge.tags, current_user["username"]
+            knowledge_id, knowledge.name, knowledge.description, knowledge.tags, current_user["username"], knowledge.category
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

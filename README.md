@@ -39,7 +39,7 @@
 
 ### 知识库列表
 
-仪表盘式卡片布局，展示所有知识库概览信息。
+Notion 风格的侧边栏分类导航，支持按类别折叠展开知识库。
 
 <div align="center">
 <img src="docs/images/dashboard.png" alt="知识库列表" width="600">
@@ -133,10 +133,33 @@ bun dev
 
 访问 http://localhost:5173
 
-### Docker
+### Docker 部署
+
+使用 Docker Compose 一键部署前后端：
 
 ```bash
+# 克隆仓库
+git clone https://github.com/your-username/CarrotContext.git
+cd CarrotContext
+
+# 配置环境变量（可选）
+export JWT_SECRET_KEY=your-production-secret-key
+
+# 启动服务
 docker-compose up -d
+```
+
+服务启动后：
+- 前端访问: http://localhost
+- 后端 API: http://localhost:8000
+- API 文档: http://localhost:8000/docs
+
+数据持久化目录: `./data/`
+
+停止服务：
+
+```bash
+docker-compose down
 ```
 
 ## 📁 项目结构
