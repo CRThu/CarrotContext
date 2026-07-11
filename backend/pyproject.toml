@@ -3,29 +3,29 @@ name = "carrotcontext-backend"
 version = "0.1.0"
 description = "CarrotContext企业知识库管理系统后端"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "python-jose[cryptography]>=3.3.0",
-    "bcrypt>=4.0.0",
-    "python-multipart>=0.0.6",
-    "aiosqlite>=0.19.0",
-    "pydantic>=2.5.0",
-    "pydantic-settings>=2.1.0",
-    "gitpython>=3.1.0",
+    "fastapi>=0.139.0",
+    "uvicorn[standard]>=0.51.0",
+    "python-jose[cryptography]>=3.5.0",
+    "bcrypt>=5.0.0",
+    "python-multipart>=0.0.32",
+    "aiosqlite>=0.22.0",
+    "pydantic>=2.13.0",
+    "pydantic-settings>=2.14.0",
+    "gitpython>=3.1.50",
     "rank-bm25>=0.2.2",
     "jieba>=0.42.1",
-    "mcp>=1.0.0",
+    "mcp>=1.28.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.1.0",
-    "httpx>=0.25.0",
-    "ruff>=0.1.0",
+    "pytest>=9.1.0",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "httpx>=0.28.0",
+    "ruff>=0.15.0",
 ]
 
 [build-system]
@@ -37,11 +37,16 @@ packages = ["app"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B"]
+# B008: FastAPI Depends() 在函数参数中是标准用法
+per-file-ignores = {"app/**/router.py" = ["B008"]}
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::ResourceWarning",
+]

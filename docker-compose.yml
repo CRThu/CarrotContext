@@ -1,23 +1,28 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
     volumes:
       - ./data:/app/data
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./data/carrotcontext.db
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
       - KNOWLEDGE_BASE_PATH=./data/knowledge
-      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","http://localhost"]
+      - CORS_ORIGINS=["http://localhost","http://localhost:${APP_PORT:-80}"]
+      - MCP_ENABLED=true
+      - MCP_PATH=/mcp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   frontend:
     build: ./frontend
     ports:
-      - "80:80"
+      - "${APP_PORT:-80}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped

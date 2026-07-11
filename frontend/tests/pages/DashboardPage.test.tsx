@@ -26,7 +26,9 @@ describe('DashboardPage', () => {
         <DashboardPage />
       </MemoryRouter>
     )
-    expect(screen.getByText('CarrotContext')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('CarrotContext')).toBeInTheDocument()
+    })
     expect(screen.getByText('新建知识库')).toBeInTheDocument()
     expect(screen.getByText('退出登录')).toBeInTheDocument()
   })

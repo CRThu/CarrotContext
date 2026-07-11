@@ -1,6 +1,7 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
+
 from app.config import settings
 
 
@@ -12,7 +13,7 @@ def load_manifest(knowledge_id: str) -> dict | None:
     manifest_path = get_manifest_path(knowledge_id)
     if not manifest_path.exists():
         return None
-    with open(manifest_path, "r", encoding="utf-8") as f:
+    with open(manifest_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -23,8 +24,15 @@ def save_manifest(knowledge_id: str, manifest: dict):
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 
-def create_manifest(knowledge_id: str, name: str, description: str, tags: list[str], created_by: str, category: str = "默认") -> dict:
-    now = datetime.now(timezone.utc).isoformat()
+def create_manifest(
+    knowledge_id: str,
+    name: str,
+    description: str,
+    tags: list[str],
+    created_by: str,
+    category: str = "默认",
+) -> dict:
+    now = datetime.now(UTC).isoformat()
     manifest = {
         "id": knowledge_id,
         "name": name,
@@ -42,13 +50,15 @@ def create_manifest(knowledge_id: str, name: str, description: str, tags: list[s
     return manifest
 
 
-def update_manifest(knowledge_id: str, updates: dict, updated_by: str) -> dict | None:
+def update_manifest(
+    knowledge_id: str, updates: dict, updated_by: str
+) -> dict | None:
     manifest = load_manifest(knowledge_id)
     if not manifest:
         return None
     manifest.update(updates)
     manifest["updated_by"] = updated_by
-    manifest["updated_at"] = datetime.now(timezone.utc).isoformat()
+    manifest["updated_at"] = datetime.now(UTC).isoformat()
     manifest["version"] = manifest.get("version", 0) + 1
     save_manifest(knowledge_id, manifest)
     return manifest
@@ -70,5 +80,6 @@ def delete_knowledge(knowledge_id: str) -> bool:
     if not knowledge_path.exists():
         return False
     import shutil
+
     shutil.rmtree(knowledge_path)
     return True

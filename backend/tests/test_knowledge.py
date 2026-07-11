@@ -1,5 +1,6 @@
-import pytest
 import uuid
+
+import pytest
 from httpx import AsyncClient
 
 
@@ -120,7 +121,11 @@ async def test_file_operations(client: AsyncClient):
     knowledge_id = f"file-{unique_id}"
     await client.post(
         "/api/knowledge",
-        json={"name": knowledge_id, "description": "", "tags": []},
+        json={
+            "name": knowledge_id,
+            "description": "",
+            "tags": [],
+        },
         headers=headers,
     )
     # Create directory
@@ -131,11 +136,11 @@ async def test_file_operations(client: AsyncClient):
     )
     assert response.status_code == 200
 
-    # Update file content (content is passed as query parameter)
+    # Update file content (content is passed as request body)
     response = await client.put(
         f"/api/knowledge/{knowledge_id}/file/docs/test.md",
-        params={"content": "# Test\nHello World"},
-        headers=headers,
+        content="# Test\nHello World",
+        headers={**headers, "Content-Type": "text/plain"},
     )
     assert response.status_code == 200
 

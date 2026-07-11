@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
+
 from app.auth.router import get_current_user
-from app.search.service import search_metadata, search_content
+from app.search.service import search_content, search_metadata
 
 router = APIRouter()
 

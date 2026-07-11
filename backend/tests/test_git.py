@@ -1,5 +1,6 @@
-import pytest
 import uuid
+
+import pytest
 from httpx import AsyncClient
 
 
@@ -8,7 +9,11 @@ async def get_auth_headers(client: AsyncClient) -> dict:
     username = f"git_{unique_id}"
     await client.post(
         "/api/auth/register",
-        json={"username": username, "email": f"{unique_id}@test.com", "password": "pass123"},
+        json={
+            "username": username,
+            "email": f"{unique_id}@test.com",
+            "password": "pass123",
+        },
     )
     resp = await client.post(
         "/api/auth/login",
@@ -23,10 +28,17 @@ async def test_init_git(client: AsyncClient):
     headers, knowledge_id = await get_auth_headers(client)
     await client.post(
         "/api/knowledge",
-        json={"name": knowledge_id, "description": "", "tags": []},
+        json={
+            "name": knowledge_id,
+            "description": "",
+            "tags": [],
+        },
         headers=headers,
     )
-    response = await client.post(f"/api/git/{knowledge_id}/init", headers=headers)
+    response = await client.post(
+        f"/api/git/{knowledge_id}/init",
+        headers=headers,
+    )
     assert response.status_code == 200
 
 
@@ -35,11 +47,21 @@ async def test_get_git_log(client: AsyncClient):
     headers, knowledge_id = await get_auth_headers(client)
     await client.post(
         "/api/knowledge",
-        json={"name": knowledge_id, "description": "", "tags": []},
+        json={
+            "name": knowledge_id,
+            "description": "",
+            "tags": [],
+        },
         headers=headers,
     )
-    await client.post(f"/api/git/{knowledge_id}/init", headers=headers)
-    response = await client.get(f"/api/git/{knowledge_id}/log", headers=headers)
+    await client.post(
+        f"/api/git/{knowledge_id}/init",
+        headers=headers,
+    )
+    response = await client.get(
+        f"/api/git/{knowledge_id}/log",
+        headers=headers,
+    )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
@@ -49,10 +71,17 @@ async def test_get_diff(client: AsyncClient):
     headers, knowledge_id = await get_auth_headers(client)
     await client.post(
         "/api/knowledge",
-        json={"name": knowledge_id, "description": "", "tags": []},
+        json={
+            "name": knowledge_id,
+            "description": "",
+            "tags": [],
+        },
         headers=headers,
     )
-    response = await client.get(f"/api/git/{knowledge_id}/diff", headers=headers)
+    response = await client.get(
+        f"/api/git/{knowledge_id}/diff",
+        headers=headers,
+    )
     assert response.status_code == 200
     assert "diff" in response.json()
 
@@ -62,20 +91,30 @@ async def test_create_commit(client: AsyncClient):
     headers, knowledge_id = await get_auth_headers(client)
     await client.post(
         "/api/knowledge",
-        json={"name": knowledge_id, "description": "", "tags": []},
+        json={
+            "name": knowledge_id,
+            "description": "",
+            "tags": [],
+        },
         headers=headers,
     )
-    await client.post(f"/api/git/{knowledge_id}/init", headers=headers)
-    # Create a file first (content is passed as query parameter)
+    await client.post(
+        f"/api/git/{knowledge_id}/init",
+        headers=headers,
+    )
+    # Create a file first (content is passed as request body)
     await client.put(
         f"/api/knowledge/{knowledge_id}/file/test.md",
-        params={"content": "# Test"},
-        headers=headers,
+        content="# Test",
+        headers={**headers, "Content-Type": "text/plain"},
     )
     # Commit
     response = await client.post(
         f"/api/git/{knowledge_id}/commit",
-        json={"message": "Initial commit", "file_path": "test.md"},
+        json={
+            "message": "Initial commit",
+            "file_path": "test.md",
+        },
         headers=headers,
     )
     assert response.status_code == 200
@@ -89,19 +128,29 @@ async def test_revert_commit(client: AsyncClient):
     headers, knowledge_id = await get_auth_headers(client)
     await client.post(
         "/api/knowledge",
-        json={"name": knowledge_id, "description": "", "tags": []},
+        json={
+            "name": knowledge_id,
+            "description": "",
+            "tags": [],
+        },
         headers=headers,
     )
-    await client.post(f"/api/git/{knowledge_id}/init", headers=headers)
-    # Create and commit a file (content is passed as query parameter)
+    await client.post(
+        f"/api/git/{knowledge_id}/init",
+        headers=headers,
+    )
+    # Create and commit a file
     await client.put(
         f"/api/knowledge/{knowledge_id}/file/test.md",
-        params={"content": "# Test"},
-        headers=headers,
+        content="# Test",
+        headers={**headers, "Content-Type": "text/plain"},
     )
     commit_resp = await client.post(
         f"/api/git/{knowledge_id}/commit",
-        json={"message": "Add test", "file_path": "test.md"},
+        json={
+            "message": "Add test",
+            "file_path": "test.md",
+        },
         headers=headers,
     )
     commit_hash = commit_resp.json()["hash"]

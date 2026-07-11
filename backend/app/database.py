@@ -1,12 +1,13 @@
-import aiosqlite
-from app.config import settings
+from pathlib import Path
 
-DATABASE_PATH = "./data/carrotcontext.db"
+import aiosqlite
+
+DATABASE_PATH = Path("./data/carrotcontext.db")
 
 
 async def get_db() -> aiosqlite.Connection:
     """获取数据库连接"""
-    db = await aiosqlite.connect(DATABASE_PATH)
+    db = await aiosqlite.connect(str(DATABASE_PATH))
     db.row_factory = aiosqlite.Row
     try:
         yield db
@@ -16,7 +17,8 @@ async def get_db() -> aiosqlite.Connection:
 
 async def init_db():
     """初始化数据库表"""
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS users (

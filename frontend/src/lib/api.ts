@@ -82,10 +82,15 @@ export const api = {
   git: {
     log: (id: string, limit?: number) =>
       request<GitCommit[]>(`/git/${id}/log${limit ? `?limit=${limit}` : ''}`),
-    diff: (id: string, _filePath?: string, _commit?: string) =>
-      request<{ diff: string }>(`/git/${id}/diff`, {
-        method: 'GET',
-      }),
+    diff: (id: string, filePath?: string, commit?: string) => {
+      const params = new URLSearchParams()
+      if (filePath) params.append('file_path', filePath)
+      if (commit) params.append('commit', commit)
+      const query = params.toString()
+      return request<{ diff: string }>(
+        `/git/${id}/diff${query ? `?${query}` : ''}`
+      )
+    },
     commit: (id: string, message: string, filePath?: string) =>
       request<GitCommit>(`/git/${id}/commit`, {
         method: 'POST',

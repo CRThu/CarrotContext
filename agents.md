@@ -6,10 +6,11 @@ CarrotContext是一个基于文件系统的企业知识库管理系统，支持M
 
 ## 技术栈
 
-- **后端**: Python 3.11+ / FastAPI / SQLite / uv
-- **前端**: React 18 / TypeScript / Vite / Bun
-- **测试**: pytest / Vitest / Playwright
-- **部署**: Docker / docker-compose
+- **后端**: Python 3.12+ / FastAPI / SQLite / uv
+- **前端**: React 19 / TypeScript / Vite / Bun / Tailwind CSS 4
+- **测试**: pytest / Vitest
+- **部署**: Docker / Caddy / docker-compose
+- **核心库**: GitPython / python-jose / rank-bm25 / jieba / MCP SDK
 
 ## 项目结构
 
@@ -24,24 +25,124 @@ carrotcontext/
 │   │   ├── knowledge/         # 知识管理
 │   │   ├── lock/              # 文件锁定
 │   │   ├── search/            # 搜索功能
-│   │   ├── git/               # Git集成
-│   │   └── mcp/               # MCP服务
+│   │   ├── git/               # Git集成（GitPython）
+│   │   └── mcp/               # MCP服务（SSE协议）
 │   ├── tests/
 │   └── pyproject.toml
 ├── frontend/                  # Vite + React前端
 │   ├── src/
 │   │   ├── components/
 │   │   ├── pages/
-│   │   ├── hooks/
 │   │   ├── stores/
 │   │   └── lib/
-│   ├── tests/
-│   ├── e2e/
-│   └── package.json
+│   ├── Caddyfile              # Caddy配置（Docker部署）
+│   └── tests/
 ├── data/                      # 知识库存储
 │   └── knowledge/
+├── .github/workflows/ci.yml  # GitHub Actions CI
+├── docker-compose.yml
 └── agents.md                  # 本文件
 ```
+
+## 部署架构
+
+### Docker + Caddy 部署
+
+```
+用户请求
+    │
+    ▼
+┌─────────────────────────────────────┐
+│  Caddy (端口可配置，默认80)          │
+│  ├─ /           → 静态资源 (dist/)  │
+│  ├─ /api/*      → Backend:8000      │
+│  └─ /mcp/*      → Backend:8000      │
+└─────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────┐
+│  Backend (内部 :8000)               │
+│  ├─ FastAPI REST API                │
+│  ├─ MCP SSE 服务                    │
+│  └─ SQLite + 文件系统               │
+└─────────────────────────────────────┘
+```
+
+### 启动命令
+
+```bash
+# 默认端口 (80)
+docker-compose up -d
+
+# 自定义端口
+APP_PORT=3000 docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+## MCP 服务
+
+### 概述
+
+MCP (Model Context Protocol) 服务通过 SSE (Server-Sent Events) 协议提供，允许外部 AI Agent 访问知识库。
+
+### 端点
+
+- SSE 端点: `http://localhost/mcp/sse` (Docker) 或 `http://localhost:8000/mcp/sse` (开发)
+
+### 提供的工具
+
+| 工具名 | 说明 |
+|--------|------|
+| `list_knowledge_base` | 列出所有知识库 |
+| `get_knowledge_detail` | 获取知识库详情 |
+| `read_file_content` | 读取文件内容 |
+| `update_file` | 更新文件内容 |
+| `create_new_knowledge` | 创建新知识库 |
+| `search_knowledge` | 搜索知识库 |
+| `get_git_history` | 获取Git提交历史 |
+| `get_file_diff` | 获取文件差异 |
+| `commit_changes` | 提交更改 |
+
+### 使用示例
+
+```python
+# 通过 MCP 客户端连接
+from mcp import ClientSession, SSEServerTransport
+
+transport = SSEServerTransport("http://localhost/mcp/sse")
+async with ClientSession(transport) as session:
+    # 列出知识库
+    result = await session.call_tool("list_knowledge_base", {})
+    print(result)
+```
+
+## 环境变量
+
+### 后端
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `DATABASE_URL` | `sqlite+aiosqlite:///./data/carrotcontext.db` | 数据库路径 |
+| `JWT_SECRET_KEY` | `your-secret-key-change-in-production` | JWT 密钥 |
+| `JWT_ALGORITHM` | `HS256` | JWT 算法 |
+| `JWT_EXPIRE_MINUTES` | `30` | Token 过期时间 |
+| `KNOWLEDGE_BASE_PATH` | `./data/knowledge` | 知识库存储路径 |
+| `LOCK_TIMEOUT_MINUTES` | `30` | 文件锁超时 |
+| `CORS_ORIGINS` | `["http://localhost:5173"]` | CORS 允许来源 |
+| `MCP_ENABLED` | `true` | 启用MCP服务 |
+| `MCP_PATH` | `/mcp` | MCP挂载路径 |
+
+### Docker
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `APP_PORT` | `80` | 前端访问端口 |
+| `JWT_SECRET_KEY` | `your-secret-key-change-in-production` | JWT 密钥 |
 
 ## 开发约定
 
@@ -57,9 +158,8 @@ carrotcontext/
 - fix/*: 修复分支
 
 ### 测试要求
-- 后端: pytest覆盖率 > 80%
-- 前端: Vitest覆盖率 > 70%
-- E2E: 覆盖核心用户流程
+- 后端: pytest 覆盖率 > 80%
+- 前端: Vitest 覆盖率 > 70%
 
 ### 前端视觉设计规范
 
@@ -78,7 +178,7 @@ carrotcontext/
 ## 核心模块说明
 
 ### 认证模块 (auth)
-- JWT token认证
+- JWT token认证（python-jose）
 - 用户注册/登录
 - 密码使用bcrypt哈希
 
@@ -86,35 +186,61 @@ carrotcontext/
 - 文件系统存储，每个根节点有.manifest.json
 - 支持文件/目录的CRUD操作
 - 文件上传支持
+- 知识库分类和标签系统
 
 ### 文件锁定 (lock)
 - 悲观锁实现，基于.lock文件
 - 支持锁状态查询和超时处理
 
 ### 搜索 (search)
-- 元数据搜索: BM25算法 + SQLite索引
-- 内容搜索: ripgrep全文搜索
+- 元数据搜索: SQLite LIKE查询
+- 内容搜索: 优先使用 ripgrep，不可用时降级为 Python grep fallback
 
 ### Git集成 (git)
 - 使用GitPython进行版本控制
 - 支持提交历史、差异查看、版本回滚
 
 ### MCP服务 (mcp)
-- Streamable HTTP协议
-- 提供知识库访问工具
+- SSE (Server-Sent Events) 协议
+- 基于 FastMCP SDK
+- 提供9个知识库访问工具
+- 通过Caddy反向代理访问
 
-## 环境变量
+## API 端点
 
-```env
-# 后端
-DATABASE_URL=sqlite:///./data/carrotcontext.db
-JWT_SECRET_KEY=your-secret-key
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=30
+### 认证
+- `POST /api/auth/register` - 用户注册
+- `POST /api/auth/login` - 用户登录
+- `GET /api/auth/me` - 获取当前用户
 
-# 前端
-VITE_API_URL=http://localhost:8000
-```
+### 知识库
+- `GET /api/knowledge` - 列表
+- `POST /api/knowledge` - 创建
+- `GET /api/knowledge/{id}` - 详情
+- `PUT /api/knowledge/{id}` - 更新
+- `DELETE /api/knowledge/{id}` - 删除
+- `GET /api/knowledge/{id}/tree` - 文件树
+- `GET /api/knowledge/{id}/file/{path}` - 文件内容
+- `PUT /api/knowledge/{id}/file/{path}` - 更新文件
+- `POST /api/knowledge/{id}/directory` - 创建目录
+
+### 搜索
+- `GET /api/search?q={query}` - 搜索
+
+### 文件锁定
+- `POST /api/lock` - 获取锁
+- `DELETE /api/lock` - 释放锁
+- `GET /api/lock/status` - 锁状态
+
+### Git
+- `POST /api/git/{id}/init` - 初始化
+- `GET /api/git/{id}/log` - 提交历史
+- `GET /api/git/{id}/diff` - 差异
+- `POST /api/git/{id}/commit` - 提交
+- `POST /api/git/{id}/revert` - 回滚
+
+### MCP
+- `GET /mcp/sse` - MCP SSE 端点
 
 ## 常用命令
 
@@ -124,13 +250,20 @@ cd backend
 uv sync                          # 安装依赖
 uv run uvicorn app.main:app --reload  # 启动开发服务器
 uv run pytest                    # 运行测试
+uv run ruff check .              # 代码检查
 
 # 前端
 cd frontend
 bun install                      # 安装依赖
 bun dev                          # 启动开发服务器
-bun test                         # 运行测试
-bunx playwright test             # E2E测试
+bunx vitest run                  # 运行测试
+bunx vite build                  # 构建生产版本
+
+# Docker
+docker-compose up -d             # 启动服务
+docker-compose down              # 停止服务
+docker-compose logs -f           # 查看日志
+APP_PORT=3000 docker-compose up -d  # 自定义端口
 ```
 
 ## 注意事项
@@ -139,4 +272,7 @@ bunx playwright test             # E2E测试
 2. 每个知识库根目录有.manifest.json存储元数据
 3. 文件锁定使用.lock文件，编辑前需要获取锁
 4. Git版本控制为每个知识库独立初始化
-5. MCP服务挂载在/mcp路径，支持远程访问
+5. MCP服务挂载在/mcp路径，SSE端点为/mcp/sse
+6. 内容搜索优先使用ripgrep，如未安装会自动降级为Python grep
+7. Docker部署使用Caddy作为反向代理，支持SPA路由和SSE流式传输
+8. 端口可通过APP_PORT环境变量自定义

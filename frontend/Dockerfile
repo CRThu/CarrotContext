@@ -18,14 +18,14 @@ COPY . .
 RUN bun run build
 
 # 生产阶段
-FROM nginx:alpine
+FROM caddy:2-alpine
 
 # 复制构建产物
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/caddy
 
-# 复制nginx配置
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# 复制Caddy配置
+COPY Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]

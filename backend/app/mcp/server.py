@@ -1,6 +1,6 @@
-from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.routing import Mount
+
 from app.mcp.tools import mcp
 
 # 创建MCP ASGI应用

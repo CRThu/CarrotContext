@@ -1,5 +1,6 @@
-import pytest
 import uuid
+
+import pytest
 from httpx import AsyncClient
 
 
@@ -8,7 +9,11 @@ async def test_register(client: AsyncClient):
     unique_id = str(uuid.uuid4())[:8]
     response = await client.post(
         "/api/auth/register",
-        json={"username": f"user_{unique_id}", "email": f"{unique_id}@test.com", "password": "testpass123"},
+        json={
+            "username": f"user_{unique_id}",
+            "email": f"{unique_id}@test.com",
+            "password": "testpass123",
+        },
     )
     assert response.status_code == 200
     data = response.json()

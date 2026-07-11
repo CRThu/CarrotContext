@@ -1,5 +1,7 @@
-import aiosqlite
 import asyncio
+
+import aiosqlite
+
 
 async def check():
     async with aiosqlite.connect('./data/carrotcontext.db') as db:
