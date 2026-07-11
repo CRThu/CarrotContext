@@ -14,6 +14,7 @@ from app.files.service import (
     is_binary_file,
     get_binary_content,
     upload_file,
+    move_file,
     BINARY_EXTENSIONS,
 )
 
@@ -243,3 +244,127 @@ class TestBinaryExtensions:
         assert "py" not in BINARY_EXTENSIONS
         assert "js" not in BINARY_EXTENSIONS
         assert "txt" not in BINARY_EXTENSIONS
+
+
+# ========== Move File Tests ==========
+
+
+class TestMoveFile:
+    def test_move_file_success(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        (kb_path / "old.txt").write_text("content", encoding="utf-8")
+        result = move_file(kb_id, "old.txt", "new.txt")
+        assert result is True
+        assert (kb_path / "new.txt").exists()
+        assert not (kb_path / "old.txt").exists()
+        assert (kb_path / "new.txt").read_text(encoding="utf-8") == "content"
+
+    def test_move_file_into_directory(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        (kb_path / "file.txt").write_text("data", encoding="utf-8")
+        (kb_path / "subdir").mkdir()
+        result = move_file(kb_id, "file.txt", "subdir")
+        assert result is True
+        assert (kb_path / "subdir" / "file.txt").exists()
+
+    def test_move_file_creates_parent_dirs(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        (kb_path / "file.txt").write_text("data", encoding="utf-8")
+        result = move_file(kb_id, "file.txt", "deep/nested/file.txt")
+        assert result is True
+        assert (kb_path / "deep" / "nested" / "file.txt").exists()
+
+    def test_move_nonexistent_file(self, setup_test_kb):
+        kb_id, _ = setup_test_kb
+        result = move_file(kb_id, "ghost.txt", "new.txt")
+        assert result is False
+
+    def test_move_manifest_rejected(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        result = move_file(kb_id, ".manifest.json", "renamed.json")
+        assert result is False
+
+    def test_move_to_manifest_rejected(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        (kb_path / "file.txt").write_text("data", encoding="utf-8")
+        result = move_file(kb_id, "file.txt", ".manifest.json")
+        assert result is False
+
+    def test_move_directory(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        (kb_path / "src").mkdir()
+        (kb_path / "src" / "file.txt").write_text("code", encoding="utf-8")
+        result = move_file(kb_id, "src", "dst")
+        assert result is True
+        assert (kb_path / "dst" / "file.txt").exists()
+        assert not (kb_path / "src").exists()
+
+
+# ========== File Not Found API Tests ==========
+
+
+@pytest.mark.anyio
+async def test_get_file_not_found(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, _ = setup_test_kb
+    resp = await client.get(
+        f"/api/knowledge/{kb_id}/files/nonexistent.md",
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_update_file_not_found(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, _ = setup_test_kb
+    resp = await client.put(
+        f"/api/knowledge/{kb_id}/files/nonexistent.md",
+        content="new content",
+        headers={**auth_header(auth_token), "Content-Type": "text/plain"},
+    )
+    assert resp.status_code == 200  # update creates new files
+
+
+@pytest.mark.anyio
+async def test_move_file_api(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, kb_path = setup_test_kb
+    (kb_path / "old.txt").write_text("move me", encoding="utf-8")
+    resp = await client.post(
+        f"/api/knowledge/{kb_id}/files/move",
+        json={"source_path": "old.txt", "dest_path": "new.txt"},
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 200
+    assert (kb_path / "new.txt").exists()
+
+
+@pytest.mark.anyio
+async def test_move_file_api_not_found(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, _ = setup_test_kb
+    resp = await client.post(
+        f"/api/knowledge/{kb_id}/files/move",
+        json={"source_path": "ghost.txt", "dest_path": "new.txt"},
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_create_dir_api(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, kb_path = setup_test_kb
+    resp = await client.post(
+        f"/api/knowledge/{kb_id}/dirs?dir_path=new-dir",
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 200
+    assert (kb_path / "new-dir").is_dir()
+
+
+@pytest.mark.anyio
+async def test_create_dir_api_exists(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, kb_path = setup_test_kb
+    (kb_path / "existing").mkdir()
+    resp = await client.post(
+        f"/api/knowledge/{kb_id}/dirs?dir_path=existing",
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 400

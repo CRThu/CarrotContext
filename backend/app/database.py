@@ -1,18 +1,8 @@
-from pathlib import Path
-
 import aiosqlite
 
-DATABASE_PATH = Path("./data/carrotcontext.db")
+from app.config import settings
 
-
-async def get_db() -> aiosqlite.Connection:
-    """获取数据库连接"""
-    db = await aiosqlite.connect(str(DATABASE_PATH))
-    db.row_factory = aiosqlite.Row
-    try:
-        yield db
-    finally:
-        await db.close()
+DATABASE_PATH = settings.DATABASE_PATH
 
 
 async def init_db():
@@ -49,13 +39,34 @@ async def init_db():
         )
         await db.execute(
             """
-            CREATE TABLE IF NOT EXISTS kb_permissions (
+            CREATE TABLE IF NOT EXISTS permission_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                UNIQUE(user_id, group_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (group_id) REFERENCES permission_groups(id) ON DELETE CASCADE
+            )
+        """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS access_rules (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 knowledge_id TEXT NOT NULL,
-                user_id INTEGER,
-                role TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(knowledge_id, user_id)
+                group_id INTEGER,
+                access_level TEXT NOT NULL,
+                UNIQUE(knowledge_id, group_id)
             )
         """
         )

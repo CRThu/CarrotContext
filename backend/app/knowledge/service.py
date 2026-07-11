@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.config import settings
+from app.config import get_knowledge_path
 from app.knowledge.manifest import (
     create_manifest,
     delete_knowledge,
@@ -8,11 +8,6 @@ from app.knowledge.manifest import (
     load_manifest,
     update_manifest,
 )
-
-
-def get_knowledge_path(knowledge_id: str) -> Path:
-    return settings.KNOWLEDGE_BASE_PATH / knowledge_id
-
 
 def list_knowledge() -> list[dict]:
     return list_all_manifests()

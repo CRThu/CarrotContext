@@ -30,7 +30,8 @@ carrotcontext/
 │   │   │   ├── service.py     # manifest读写
 │   │   │   ├── manifest.py    # manifest文件操作
 │   │   │   ├── models.py      # 数据模型
-│   │   │   └── permissions.py # 权限检查服务
+│   │   │   ├── permissions.py # 权限检查服务
+│   │   │   └── access_rules.py # 权限规则CRUD
 │   │   ├── files/             # 文件操作
 │   │   │   ├── router.py      # 文件读写、移动、上传、下载
 │   │   │   └── service.py     # 文件操作服务
@@ -47,13 +48,10 @@ carrotcontext/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── ThemeToggle.tsx     # 主题切换按钮
-│   │   │   ├── Auth/              # 认证相关组件
 │   │   │   ├── CodeEditor/        # 代码编辑器
 │   │   │   ├── FileTree/          # 文件树（支持拖拽）
 │   │   │   ├── GitHistory/        # Git历史查看
-│   │   │   ├── MarkdownEditor/    # Markdown编辑
-│   │   │   ├── MarkdownViewer/    # Markdown预览
-│   │   │   └── Search/            # 搜索组件
+│   │   │   └── MarkdownViewer/    # Markdown预览
 │   │   ├── pages/
 │   │   │   ├── LoginPage.tsx
 │   │   │   ├── RegisterPage.tsx
@@ -159,7 +157,7 @@ async with ClientSession(transport) as session:
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `DATABASE_URL` | `sqlite+aiosqlite:///./data/carrotcontext.db` | 数据库路径 |
+| `DATABASE_PATH` | `./data/carrotcontext.db` | 数据库路径 |
 | `JWT_SECRET_KEY` | `your-secret-key-change-in-production` | JWT 密钥 |
 | `JWT_ALGORITHM` | `HS256` | JWT 算法 |
 | `JWT_EXPIRE_MINUTES` | `30` | Token 过期时间 |
@@ -215,13 +213,23 @@ async with ClientSession(transport) as session:
 - 密码使用bcrypt哈希
 - 管理员角色管理（用户列表、角色修改、删除用户）
 - 首个注册用户自动成为管理员
+- 组管理（创建/删除组、添加/移除成员）
+
+### 权限模型 (RBAC)
+基于组的访问控制（Role-Based Access Control）：
+- **权限组 (permission_groups)**: 命名的用户集合，如 "editors"、"viewers"
+- **用户-组关联 (user_groups)**: 用户可以属于多个组
+- **访问规则 (access_rules)**: 知识库级别的权限配置
+- **权限级别**: `manage` > `write` > `read` > `none`
+- **Admin绕过**: 系统管理员自动拥有所有知识库的完全访问权限
+- **拒绝默认**: 已认证但无组访问的用户无任何权限
 
 ### 知识管理 (knowledge)
 - 文件系统存储，每个根节点有.manifest.json
 - 支持文件/目录的CRUD操作
 - 文件上传支持
 - 知识库分类和标签系统
-- 权限管理（admin/editor/viewer三级权限）
+- 权限管理（基于组的访问控制，manage/write/read/none四级权限）
 
 ### 文件操作 (files)
 - 文件读写、移动、上传
@@ -263,6 +271,14 @@ async with ClientSession(transport) as session:
 - `PUT /api/auth/users/{id}/role` - 修改用户角色（管理员）
 - `DELETE /api/auth/users/{id}` - 删除用户（管理员）
 
+### 组管理
+- `GET /api/auth/groups` - 组列表（管理员）
+- `POST /api/auth/groups` - 创建组（管理员）
+- `DELETE /api/auth/groups/{id}` - 删除组（管理员）
+- `GET /api/auth/groups/{id}/members` - 组成员列表（管理员）
+- `POST /api/auth/groups/{id}/members` - 添加成员（管理员）
+- `DELETE /api/auth/groups/{id}/members/{user_id}` - 移除成员（管理员）
+
 ### 知识库
 - `GET /api/knowledge` - 列表
 - `POST /api/knowledge` - 创建
@@ -278,7 +294,7 @@ async with ClientSession(transport) as session:
 - `POST /api/knowledge/{id}/dirs` - 创建目录
 - `GET /api/knowledge/{id}/permissions` - 权限列表（管理员）
 - `POST /api/knowledge/{id}/permissions` - 设置权限（管理员）
-- `DELETE /api/knowledge/{id}/permissions/{perm_id}` - 删除权限（管理员）
+- `DELETE /api/knowledge/{id}/permissions/{rule_id}` - 删除权限（管理员）
 
 ### 搜索
 - `GET /api/search?q={query}` - 搜索

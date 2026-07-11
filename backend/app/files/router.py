@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel
 
 from app.auth.router import get_current_user
-from app.knowledge.models import FileContent, TreeNode
+from app.knowledge.models import FileContent, FileMoveRequest, TreeNode
+from app.knowledge.permissions import require_access
 from app.files.service import (
     create_directory,
     get_binary_content,
@@ -15,11 +15,6 @@ from app.files.service import (
     upload_file,
 )
 
-
-class FileMoveRequest(BaseModel):
-    source_path: str
-    dest_path: str
-
 router = APIRouter()
 
 # Maximum upload size: 10MB
@@ -30,7 +25,7 @@ MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 async def get_tree_api(
     knowledge_id: str,
     path: str = "",
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("read")),
 ):
     return get_file_tree(knowledge_id, path)
 
@@ -39,7 +34,7 @@ async def get_tree_api(
 async def get_raw_file_api(
     knowledge_id: str,
     file_path: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("read")),
 ):
     """Download a binary file"""
     content = get_binary_content(knowledge_id, file_path)
@@ -79,7 +74,7 @@ async def get_raw_file_api(
 async def get_file_api(
     knowledge_id: str,
     file_path: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("read")),
 ):
     content = get_file_content(knowledge_id, file_path)
     if not content:
@@ -95,7 +90,7 @@ async def update_file_api(
     knowledge_id: str,
     file_path: str,
     content: str = Body(..., media_type="text/plain"),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("write")),
 ):
     if not update_file_content(knowledge_id, file_path, content):
         raise HTTPException(
@@ -109,7 +104,7 @@ async def update_file_api(
 async def create_dir_api(
     knowledge_id: str,
     dir_path: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("write")),
 ):
     if not create_directory(knowledge_id, dir_path):
         raise HTTPException(
@@ -123,7 +118,7 @@ async def create_dir_api(
 async def move_file_api(
     knowledge_id: str,
     request: FileMoveRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("write")),
 ):
     if not move_file(knowledge_id, request.source_path, request.dest_path):
         raise HTTPException(
@@ -138,7 +133,7 @@ async def upload_file_api(
     knowledge_id: str,
     file: UploadFile,
     path: str = "",
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("write")),
 ):
     """Upload a file to the knowledge base"""
     content = await file.read()

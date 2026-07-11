@@ -2,11 +2,7 @@ from pathlib import Path
 
 from git import InvalidGitRepositoryError, Repo
 
-from app.config import settings
-
-
-def get_knowledge_path(knowledge_id: str) -> Path:
-    return settings.KNOWLEDGE_BASE_PATH / knowledge_id
+from app.config import get_knowledge_path
 
 
 def _get_repo(knowledge_id: str) -> Repo | None:

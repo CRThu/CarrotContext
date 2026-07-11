@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth.router import get_current_user
+from app.knowledge.permissions import require_access
 from app.git.models import (
     GitCommitRequest,
     GitCommitResponse,
@@ -20,7 +21,7 @@ router = APIRouter()
 @router.post("/{knowledge_id}/init")
 async def init_git_api(
     knowledge_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("write")),
 ):
     if not init_git(knowledge_id):
         raise HTTPException(status_code=404, detail="知识库不存在")
@@ -31,7 +32,7 @@ async def init_git_api(
 async def get_log_api(
     knowledge_id: str,
     limit: int = 10,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("read")),
 ):
     return get_git_log(knowledge_id, limit)
 
@@ -41,7 +42,7 @@ async def get_diff_api(
     knowledge_id: str,
     file_path: str | None = None,
     commit: str | None = None,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("read")),
 ):
     return {"diff": get_git_diff(knowledge_id, file_path, commit)}
 
@@ -53,7 +54,7 @@ async def get_diff_api(
 async def commit_api(
     knowledge_id: str,
     request: GitCommitRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("write")),
 ):
     result = create_git_commit(
         knowledge_id, request.message, request.file_path
@@ -67,7 +68,7 @@ async def commit_api(
 async def revert_api(
     knowledge_id: str,
     request: GitRevertRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access("write")),
 ):
     if not revert_git_commit(knowledge_id, request.commit_hash):
         raise HTTPException(status_code=400, detail="回滚失败")

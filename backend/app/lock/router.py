@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.router import get_current_user
+from app.knowledge.permissions import check_access, require_access_body
 from app.lock.models import LockRequest, LockResponse, LockStatus
 from app.lock.service import acquire_lock, get_lock_status, release_lock
 
@@ -10,7 +11,7 @@ router = APIRouter()
 @router.post("", response_model=LockResponse)
 async def acquire_lock_api(
     lock: LockRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access_body("write")),
 ):
     result = acquire_lock(
         lock.knowledge_id, lock.file_path, current_user["username"]
@@ -33,7 +34,7 @@ async def acquire_lock_api(
 @router.delete("", response_model=LockResponse)
 async def release_lock_api(
     lock: LockRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_access_body("write")),
 ):
     success = release_lock(
         lock.knowledge_id, lock.file_path, current_user["username"]
@@ -52,6 +53,12 @@ async def get_lock_status_api(
     file_path: str,
     current_user: dict = Depends(get_current_user),
 ):
+    # Query params: use manual check_access (require_access needs path params)
+    if not await check_access(current_user["id"], knowledge_id, "read"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要 read 权限",
+        )
     lock_data = get_lock_status(knowledge_id, file_path)
     if not lock_data:
         return LockStatus(

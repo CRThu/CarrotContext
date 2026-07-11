@@ -43,7 +43,8 @@ app/
 │   ├── service.py     # manifest读写
 │   ├── manifest.py    # manifest.json 管理
 │   ├── models.py      # 数据模型
-│   └── permissions.py # 权限检查服务（admin/editor/viewer）
+│   ├── permissions.py # 权限检查服务
+│   └── access_rules.py # 权限规则CRUD
 ├── files/             # 文件操作
 │   ├── router.py      # 文件读写、移动、上传、下载
 │   └── service.py     # 文件操作服务

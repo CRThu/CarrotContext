@@ -322,3 +322,104 @@ async def test_release_lock_api(client):
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_acquire_lock_already_locked_api(client):
+    """已锁定的文件再次锁定返回 success=False"""
+    headers, knowledge_id = await get_auth_headers(client)
+    await client.post(
+        "/api/knowledge",
+        json={"name": knowledge_id, "description": "", "tags": []},
+        headers=headers,
+    )
+    # 先锁定
+    await client.post(
+        "/api/lock",
+        json={"knowledge_id": knowledge_id, "file_path": "test.md"},
+        headers=headers,
+    )
+    # 再次锁定（同用户）
+    response = await client.post(
+        "/api/lock",
+        json={"knowledge_id": knowledge_id, "file_path": "test.md"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # 锁已存在且未过期，返回 success=False
+    assert data["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_release_lock_not_exists_api(client):
+    """释放不存在的锁返回 success=False"""
+    headers, knowledge_id = await get_auth_headers(client)
+    await client.post(
+        "/api/knowledge",
+        json={"name": knowledge_id, "description": "", "tags": []},
+        headers=headers,
+    )
+    response = await client.request(
+        "DELETE",
+        "/api/lock",
+        json={"knowledge_id": knowledge_id, "file_path": "ghost.md"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_lock_status_not_locked_api(client):
+    """未锁定的文件返回 locked=False"""
+    headers, knowledge_id = await get_auth_headers(client)
+    await client.post(
+        "/api/knowledge",
+        json={"name": knowledge_id, "description": "", "tags": []},
+        headers=headers,
+    )
+    response = await client.get(
+        f"/api/lock/status?knowledge_id={knowledge_id}&file_path=free.md",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["locked"] is False
+
+
+@pytest.mark.asyncio
+async def test_lock_permission_denied_api(client):
+    """无权限用户不能锁定文件"""
+    headers, knowledge_id = await get_auth_headers(client)
+    await client.post(
+        "/api/knowledge",
+        json={"name": knowledge_id, "description": "", "tags": []},
+        headers=headers,
+    )
+    # 另一个无权限用户
+    headers2, _ = await get_auth_headers(client)
+    response = await client.post(
+        "/api/lock",
+        json={"knowledge_id": knowledge_id, "file_path": "test.md"},
+        headers=headers2,
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_lock_status_permission_denied_api(client):
+    """无权限用户不能查看锁状态"""
+    headers, knowledge_id = await get_auth_headers(client)
+    await client.post(
+        "/api/knowledge",
+        json={"name": knowledge_id, "description": "", "tags": []},
+        headers=headers,
+    )
+    headers2, _ = await get_auth_headers(client)
+    response = await client.get(
+        f"/api/lock/status?knowledge_id={knowledge_id}&file_path=test.md",
+        headers=headers2,
+    )
+    assert response.status_code == 403

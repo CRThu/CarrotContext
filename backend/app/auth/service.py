@@ -78,6 +78,14 @@ async def decode_token(token: str) -> dict | None:
         return None
 
 
+async def get_current_user_from_token(token: str) -> dict | None:
+    """Unified auth entry point: decode JWT token and return user dict."""
+    token_data = await decode_token(token)
+    if not token_data:
+        return None
+    return await get_user_by_id(token_data["user_id"])
+
+
 async def get_all_users() -> list[dict]:
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         db.row_factory = aiosqlite.Row
@@ -103,3 +111,106 @@ async def delete_user(user_id: int) -> bool:
         cursor = await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         await db.commit()
         return cursor.rowcount > 0
+
+
+# --- Group CRUD ---
+
+
+async def create_group(name: str, description: str = "") -> dict:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "INSERT INTO permission_groups (name, description) VALUES (?, ?)",
+            (name, description),
+        )
+        await db.commit()
+        row = await db.execute(
+            "SELECT * FROM permission_groups WHERE id = ?", (cursor.lastrowid,)
+        )
+        return dict(await row.fetchone())
+
+
+async def get_all_groups() -> list[dict]:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM permission_groups ORDER BY id"
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def get_group(group_id: int) -> dict | None:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM permission_groups WHERE id = ?", (group_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def delete_group(group_id: int) -> bool:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            "DELETE FROM permission_groups WHERE id = ?", (group_id,)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def add_user_to_group(user_id: int, group_id: int) -> bool:
+    try:
+        async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+            await db.execute(
+                "INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)",
+                (user_id, group_id),
+            )
+            await db.commit()
+            return True
+    except aiosqlite.IntegrityError:
+        return False
+
+
+async def remove_user_from_group(user_id: int, group_id: int) -> bool:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            "DELETE FROM user_groups WHERE user_id = ? AND group_id = ?",
+            (user_id, group_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def get_group_members(group_id: int) -> list[dict]:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT u.id as user_id, u.username
+            FROM user_groups ug
+            JOIN users u ON u.id = ug.user_id
+            WHERE ug.group_id = ?
+            ORDER BY u.username
+            """,
+            (group_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def get_user_groups(user_id: int) -> list[dict]:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT pg.id, pg.name, pg.description
+            FROM user_groups ug
+            JOIN permission_groups pg ON pg.id = ug.group_id
+            WHERE ug.user_id = ?
+            ORDER BY pg.name
+            """,
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]

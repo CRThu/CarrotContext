@@ -2,11 +2,11 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.config import settings
+from app.config import get_knowledge_path, settings
 
 
 def get_manifest_path(knowledge_id: str) -> Path:
-    return settings.KNOWLEDGE_BASE_PATH / knowledge_id / ".manifest.json"
+    return get_knowledge_path(knowledge_id) / ".manifest.json"
 
 
 def load_manifest(knowledge_id: str) -> dict | None:
@@ -76,7 +76,7 @@ def list_all_manifests() -> list[dict]:
 
 
 def delete_knowledge(knowledge_id: str) -> bool:
-    knowledge_path = settings.KNOWLEDGE_BASE_PATH / knowledge_id
+    knowledge_path = get_knowledge_path(knowledge_id)
     if not knowledge_path.exists():
         return False
     import shutil

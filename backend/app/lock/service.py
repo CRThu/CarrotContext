@@ -2,11 +2,11 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from app.config import settings
+from app.config import get_knowledge_path, settings
 
 
 def get_lock_path(knowledge_id: str, file_path: str) -> Path:
-    knowledge_path = settings.KNOWLEDGE_BASE_PATH / knowledge_id
+    knowledge_path = get_knowledge_path(knowledge_id)
     lock_dir = knowledge_path / ".locks"
     lock_dir.mkdir(parents=True, exist_ok=True)
     safe_name = file_path.replace("/", "_").replace("\\", "_")

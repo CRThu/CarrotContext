@@ -7,13 +7,19 @@ import aiosqlite
 from app.config import settings
 from app.database import DATABASE_PATH
 
+# Shared SQL constants
+_SEARCH_INDEX_SELECT = "SELECT * FROM search_index WHERE title LIKE ? OR tags LIKE ? OR summary LIKE ?"
+_SEARCH_INDEX_UPSERT = """INSERT OR REPLACE INTO search_index
+               (knowledge_id, file_path, title, tags, summary, content, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"""
+
 
 async def _search_metadata(query: str, limit: int = 20) -> list[dict]:
     """异步BM25搜索元数据"""
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT * FROM search_index WHERE title LIKE ? OR tags LIKE ? OR summary LIKE ?",
+            _SEARCH_INDEX_SELECT,
             (f"%{query}%", f"%{query}%", f"%{query}%"),
         ) as cursor:
             rows = await cursor.fetchall()
@@ -28,7 +34,7 @@ def search_metadata(query: str, limit: int = 20) -> list[dict]:
         with sqlite3.connect(str(DATABASE_PATH)) as db:
             db.row_factory = sqlite3.Row
             cursor = db.execute(
-                "SELECT * FROM search_index WHERE title LIKE ? OR tags LIKE ? OR summary LIKE ?",
+                _SEARCH_INDEX_SELECT,
                 (f"%{query}%", f"%{query}%", f"%{query}%"),
             )
             rows = cursor.fetchmany(limit)
@@ -130,6 +136,32 @@ def search_content(
         return _search_with_grep(query, search_path, limit)
 
 
+def _load_knowledge_manifests() -> list[tuple[str, str, list[str], str, str]]:
+    """Load all knowledge manifests from the knowledge base directory.
+
+    Returns list of (knowledge_id, name, tags, summary, description) tuples.
+    """
+    entries = []
+    if not settings.KNOWLEDGE_BASE_PATH.exists():
+        return entries
+
+    for knowledge_dir in settings.KNOWLEDGE_BASE_PATH.iterdir():
+        if not knowledge_dir.is_dir():
+            continue
+        manifest_path = knowledge_dir / ".manifest.json"
+        if manifest_path.exists():
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+            entries.append((
+                knowledge_dir.name,
+                manifest.get("name", ""),
+                manifest.get("tags", []),
+                manifest.get("summary", ""),
+                manifest.get("description", ""),
+            ))
+    return entries
+
+
 async def _update_search_index(
     knowledge_id: str,
     file_path: str,
@@ -141,9 +173,7 @@ async def _update_search_index(
     """异步更新搜索索引"""
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         await db.execute(
-            """INSERT OR REPLACE INTO search_index
-               (knowledge_id, file_path, title, tags, summary, content, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+            _SEARCH_INDEX_UPSERT,
             (knowledge_id, file_path, title, json.dumps(tags), summary, content),
         )
         await db.commit()
@@ -163,9 +193,7 @@ def update_search_index(
     try:
         with sqlite3.connect(str(DATABASE_PATH)) as db:
             db.execute(
-                """INSERT OR REPLACE INTO search_index
-                   (knowledge_id, file_path, title, tags, summary, content, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+                _SEARCH_INDEX_UPSERT,
                 (knowledge_id, file_path, title, json.dumps(tags), summary, content),
             )
             db.commit()
@@ -175,33 +203,14 @@ def update_search_index(
 
 async def _rebuild_search_index():
     """异步重建搜索索引"""
+    entries = _load_knowledge_manifests()
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         await db.execute("DELETE FROM search_index")
-
-        if not settings.KNOWLEDGE_BASE_PATH.exists():
-            return
-
-        for knowledge_dir in settings.KNOWLEDGE_BASE_PATH.iterdir():
-            if not knowledge_dir.is_dir():
-                continue
-            manifest_path = knowledge_dir / ".manifest.json"
-            if manifest_path.exists():
-                with open(manifest_path, encoding="utf-8") as f:
-                    manifest = json.load(f)
-                await db.execute(
-                    """INSERT OR REPLACE INTO search_index
-                       (knowledge_id, file_path, title, tags, summary, content, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
-                    (
-                        knowledge_dir.name,
-                        "",
-                        manifest.get("name", ""),
-                        json.dumps(manifest.get("tags", [])),
-                        manifest.get("summary", ""),
-                        manifest.get("description", ""),
-                    ),
-                )
-
+        for kb_id, name, tags, summary, description in entries:
+            await db.execute(
+                _SEARCH_INDEX_UPSERT,
+                (kb_id, "", name, json.dumps(tags), summary, description),
+            )
         await db.commit()
 
 
@@ -210,33 +219,14 @@ def rebuild_search_index():
     import sqlite3
 
     try:
+        entries = _load_knowledge_manifests()
         with sqlite3.connect(str(DATABASE_PATH)) as db:
             db.execute("DELETE FROM search_index")
-
-            if not settings.KNOWLEDGE_BASE_PATH.exists():
-                return
-
-            for knowledge_dir in settings.KNOWLEDGE_BASE_PATH.iterdir():
-                if not knowledge_dir.is_dir():
-                    continue
-                manifest_path = knowledge_dir / ".manifest.json"
-                if manifest_path.exists():
-                    with open(manifest_path, encoding="utf-8") as f:
-                        manifest = json.load(f)
-                    db.execute(
-                        """INSERT OR REPLACE INTO search_index
-                           (knowledge_id, file_path, title, tags, summary, content, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
-                        (
-                            knowledge_dir.name,
-                            "",
-                            manifest.get("name", ""),
-                            json.dumps(manifest.get("tags", [])),
-                            manifest.get("summary", ""),
-                            manifest.get("description", ""),
-                        ),
-                    )
-
+            for kb_id, name, tags, summary, description in entries:
+                db.execute(
+                    _SEARCH_INDEX_UPSERT,
+                    (kb_id, "", name, json.dumps(tags), summary, description),
+                )
             db.commit()
     except Exception:
         pass

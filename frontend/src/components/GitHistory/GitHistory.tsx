@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useKnowledgeStore } from '../../stores/knowledgeStore'
 import { api } from '../../lib/api'
 import type { GitCommit } from '../../types'
 import { GitCommit as GitCommitIcon, RefreshCw, RotateCcw } from 'lucide-react'

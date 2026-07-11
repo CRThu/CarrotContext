@@ -1,14 +1,5 @@
 import { useAuthStore } from '../stores/authStore'
-import type { User, Knowledge, TreeNode, FileContent, LockStatus, GitCommit, SearchResult } from '../types'
-
-export interface Permission {
-  id: number
-  knowledge_id: string
-  user_id: number | null
-  role: string
-  username: string | null
-  created_at: string
-}
+import type { User, Knowledge, TreeNode, FileContent, LockStatus, GitCommit, SearchResult, PermissionGroup, GroupMember, AccessRule } from '../types'
 
 const API_BASE = '/api'
 
@@ -158,16 +149,39 @@ export const api = {
         method: 'DELETE',
       }),
   },
+  groups: {
+    list: () => request<{ groups: PermissionGroup[] }>('/auth/groups'),
+    create: (name: string, description: string = '') =>
+      request<PermissionGroup>('/auth/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name, description }),
+      }),
+    delete: (groupId: number) =>
+      request<{ message: string }>(`/auth/groups/${groupId}`, {
+        method: 'DELETE',
+      }),
+    members: (groupId: number) =>
+      request<GroupMember[]>(`/auth/groups/${groupId}/members`),
+    addMember: (groupId: number, userId: number) =>
+      request<GroupMember>(`/auth/groups/${groupId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId }),
+      }),
+    removeMember: (groupId: number, userId: number) =>
+      request<{ message: string }>(`/auth/groups/${groupId}/members/${userId}`, {
+        method: 'DELETE',
+      }),
+  },
   permissions: {
     list: (knowledgeId: string) =>
-      request<{ permissions: Permission[] }>(`/knowledge/${knowledgeId}/permissions`),
-    set: (knowledgeId: string, userId: number | null, role: string) =>
-      request<{ message: string }>(`/knowledge/${knowledgeId}/permissions`, {
+      request<{ rules: AccessRule[] }>(`/knowledge/${knowledgeId}/permissions`),
+    set: (knowledgeId: string, groupId: number | null, accessLevel: string) =>
+      request<AccessRule>(`/knowledge/${knowledgeId}/permissions`, {
         method: 'POST',
-        body: JSON.stringify({ user_id: userId, role }),
+        body: JSON.stringify({ group_id: groupId, access_level: accessLevel }),
       }),
-    delete: (knowledgeId: string, permId: number) =>
-      request<{ message: string }>(`/knowledge/${knowledgeId}/permissions/${permId}`, {
+    delete: (knowledgeId: string, ruleId: number) =>
+      request<{ message: string }>(`/knowledge/${knowledgeId}/permissions/${ruleId}`, {
         method: 'DELETE',
       }),
   },

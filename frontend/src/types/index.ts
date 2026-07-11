@@ -59,3 +59,23 @@ export interface SearchResult {
   score: number
   snippet: string
 }
+
+export interface PermissionGroup {
+  id: number
+  name: string
+  description: string
+  created_at: string
+}
+
+export interface GroupMember {
+  user_id: number
+  username: string
+}
+
+export interface AccessRule {
+  id: number
+  knowledge_id: string
+  group_id: number | null
+  group_name: string | null
+  access_level: 'manage' | 'write' | 'read' | 'none'
+}

@@ -4,7 +4,7 @@
 
 一个基于文件系统的企业知识库管理系统
 
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
@@ -193,7 +193,7 @@ docker-compose up -d
 MCP (Model Context Protocol) 服务通过 SSE 协议提供，支持外部 Agent 访问知识库：
 
 - SSE 端点: `http://localhost/mcp/sse`
-- 提供工具: `list_knowledge_base`, `get_knowledge_detail`, `read_file_content`, `update_file`, `search_knowledge`, `get_git_history`, `commit_changes` 等
+- 提供工具: `list_knowledge_base`, `get_knowledge_detail`, `read_file_content`, `update_file`, `create_new_knowledge`, `search_knowledge`, `get_git_history`, `get_file_diff`, `commit_changes`
 
 **数据持久化**
 
@@ -275,7 +275,7 @@ CarrotContext/
 | POST | `/api/knowledge/{id}/dirs` | 创建目录 |
 | GET | `/api/knowledge/{id}/permissions` | 权限列表（管理员） |
 | POST | `/api/knowledge/{id}/permissions` | 设置权限（管理员） |
-| DELETE | `/api/knowledge/{id}/permissions/{perm_id}` | 删除权限（管理员） |
+| DELETE | `/api/knowledge/{id}/permissions/{rule_id}` | 删除权限（管理员） |
 
 ### 搜索 API
 
@@ -317,13 +317,13 @@ CarrotContext/
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `DATABASE_URL` | `sqlite+aiosqlite:///./data/carrotcontext.db` | 数据库路径 |
+| `DATABASE_PATH` | `./data/carrotcontext.db` | 数据库路径 |
 | `JWT_SECRET_KEY` | `your-secret-key-change-in-production` | JWT 密钥 |
 | `JWT_ALGORITHM` | `HS256` | JWT 算法 |
 | `JWT_EXPIRE_MINUTES` | `30` | Token 过期时间 |
 | `KNOWLEDGE_BASE_PATH` | `./data/knowledge` | 知识库存储路径 |
 | `LOCK_TIMEOUT_MINUTES` | `30` | 文件锁超时时间 |
-| `CORS_ORIGINS` | `["http://localhost:5173"]` | 允许的跨域来源 |
+| `CORS_ORIGINS` | `["http://localhost:5173", "http://localhost:3000"]` | 允许的跨域来源 |
 | `MCP_ENABLED` | `true` | 是否启用 MCP 服务 |
 | `MCP_PATH` | `/mcp` | MCP 挂载路径 |
 

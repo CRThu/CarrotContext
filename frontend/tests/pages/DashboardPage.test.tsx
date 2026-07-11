@@ -33,7 +33,11 @@ describe('DashboardPage', () => {
     expect(screen.getByText('退出登录')).toBeInTheDocument()
   })
 
-  it('shows loading state initially', () => {
+  it('shows loading state initially', async () => {
+    // Use a never-resolving mock to prevent useEffect state updates
+    const { api } = await import('../../src/lib/api')
+    vi.mocked(api.knowledge.list).mockReturnValue(new Promise(() => {}))
+
     render(
       <MemoryRouter>
         <DashboardPage />

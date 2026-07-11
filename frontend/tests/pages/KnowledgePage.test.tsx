@@ -1,19 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import KnowledgePage from '../../src/pages/KnowledgePage'
-
-// Mock API
-vi.mock('../../src/lib/api', () => ({
-  api: {
-    knowledge: {
-      get: vi.fn().mockResolvedValue({ id: 'test-123', name: 'Test Knowledge' }),
-      tree: vi.fn().mockResolvedValue([]),
-      file: vi.fn().mockResolvedValue({ content: '# Test', path: 'test.md' }),
-      updateFile: vi.fn().mockResolvedValue({}),
-    },
-  },
-}))
 
 // Mock stores
 vi.mock('../../src/stores/knowledgeStore', () => ({
@@ -38,12 +25,38 @@ vi.mock('react-router-dom', async () => {
   }
 })
 
+// Mock API with mutable refs so beforeEach can re-set implementations
+const mockGet = vi.fn().mockResolvedValue({ id: 'test-123', name: 'Test Knowledge' })
+const mockTree = vi.fn().mockResolvedValue([])
+const mockFile = vi.fn().mockResolvedValue({ content: '# Test', path: 'test.md' })
+const mockUpdateFile = vi.fn().mockResolvedValue({})
+
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    knowledge: {
+      get: (...args: unknown[]) => mockGet(...args),
+      tree: (...args: unknown[]) => mockTree(...args),
+      file: (...args: unknown[]) => mockFile(...args),
+      updateFile: (...args: unknown[]) => mockUpdateFile(...args),
+    },
+  },
+}))
+
+import KnowledgePage from '../../src/pages/KnowledgePage'
+
 describe('KnowledgePage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mockGet.mockResolvedValue({ id: 'test-123', name: 'Test Knowledge' })
+    mockTree.mockResolvedValue([])
+    mockFile.mockResolvedValue({ content: '# Test', path: 'test.md' })
+    mockUpdateFile.mockResolvedValue({})
   })
 
-  it('shows loading state initially', () => {
+  it('shows loading state initially', async () => {
+    // Override to never-resolving to prevent state updates
+    mockGet.mockReturnValue(new Promise(() => {}))
+    mockTree.mockReturnValue(new Promise(() => {}))
+
     render(
       <MemoryRouter>
         <KnowledgePage />

@@ -42,3 +42,8 @@ class FileContent(BaseModel):
     content: str
     size: int
     modified_at: str
+
+
+class FileMoveRequest(BaseModel):
+    source_path: str
+    dest_path: str

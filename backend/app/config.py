@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # 数据库配置
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/carrotcontext.db"
+    DATABASE_PATH: Path = Path("./data/carrotcontext.db")
 
     # JWT配置
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
@@ -37,7 +37,12 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
+def get_knowledge_path(knowledge_id: str) -> Path:
+    """获取知识库的文件系统路径"""
+    return settings.KNOWLEDGE_BASE_PATH / knowledge_id
+
+
 def ensure_directories():
     """确保必要的目录存在"""
     settings.KNOWLEDGE_BASE_PATH.mkdir(parents=True, exist_ok=True)
-    Path("./data").mkdir(parents=True, exist_ok=True)
+    settings.DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)

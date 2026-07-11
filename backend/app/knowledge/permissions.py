@@ -1,106 +1,125 @@
-import aiosqlite
+from fastapi import Depends, HTTPException, Request, status
 
+from app.auth.router import get_current_user
+from app.auth.service import get_user_by_id
 from app.database import DATABASE_PATH
 
-# Role hierarchy: admin > editor > viewer
-ROLE_HIERARCHY = {"admin": 3, "editor": 2, "viewer": 1}
+import aiosqlite
+
+ACCESS_LEVELS = {"manage": 3, "write": 2, "read": 1, "none": 0}
 
 
-def has_required_role(user_role: str, required_role: str) -> bool:
-    """Check if user_role >= required_role in hierarchy"""
-    return ROLE_HIERARCHY.get(user_role, 0) >= ROLE_HIERARCHY.get(required_role, 0)
+async def check_access(user_id: int | None, knowledge_id: str, required: str) -> bool:
+    """Check if user has required access level for a knowledge base."""
+    # Admin bypass
+    if user_id is not None:
+        user = await get_user_by_id(user_id)
+        if user and user.get("role") == "admin":
+            return True
 
-
-async def get_user_role(user_id: int | None) -> str:
-    """Get user's system role. Returns 'viewer' for anonymous (None user_id)"""
-    if user_id is None:
-        # Check anonymous default from system_settings
-        async with aiosqlite.connect(str(DATABASE_PATH)) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT value FROM system_settings WHERE key = ?",
-                ("anonymous_default_role",),
-            ) as cursor:
-                row = await cursor.fetchone()
-                return row["value"] if row else "viewer"
-
-    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT role FROM users WHERE id = ?", (user_id,)) as cursor:
-            row = await cursor.fetchone()
-            return row["role"] if row else "viewer"
-
-
-async def check_permission(user_id: int | None, knowledge_id: str, required_role: str) -> bool:
-    """Check if user has required permission for a knowledge base"""
-    # Get user's system role
-    system_role = await get_user_role(user_id)
-
-    # Admin users bypass all permission checks
-    if system_role == "admin":
+    required_level = ACCESS_LEVELS.get(required, 0)
+    if required_level == 0:
         return True
 
-    # Check KB-specific permissions
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         db.row_factory = aiosqlite.Row
 
+        # Check user's groups for this KB
         if user_id is not None:
-            # Check user-specific permission
+            max_level = 0
+            has_group_rule = False
             async with db.execute(
-                "SELECT role FROM kb_permissions WHERE knowledge_id = ? AND user_id = ?",
+                """
+                SELECT ar.access_level
+                FROM access_rules ar
+                JOIN user_groups ug ON ug.group_id = ar.group_id
+                WHERE ar.knowledge_id = ? AND ug.user_id = ?
+                """,
                 (knowledge_id, user_id),
             ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    return has_required_role(row["role"], required_role)
+                rows = await cursor.fetchall()
+                for row in rows:
+                    has_group_rule = True
+                    level = ACCESS_LEVELS.get(row["access_level"], 0)
+                    if level > max_level:
+                        max_level = level
 
-        # Check anonymous permission (user_id = NULL)
+            if has_group_rule:
+                return max_level >= required_level
+
+            # No group rules → no access (no default write)
+            return False
+
+        # Check anonymous rule (group_id IS NULL) - only for unauthenticated users
         async with db.execute(
-            "SELECT role FROM kb_permissions WHERE knowledge_id = ? AND user_id IS NULL",
+            """
+            SELECT access_level FROM access_rules
+            WHERE knowledge_id = ? AND group_id IS NULL
+            """,
             (knowledge_id,),
         ) as cursor:
             row = await cursor.fetchone()
             if row:
-                return has_required_role(row["role"], required_role)
+                level = ACCESS_LEVELS.get(row["access_level"], 0)
+                if level >= required_level:
+                    return True
 
-    # Default: viewer access for all authenticated users
-    return has_required_role("viewer", required_role)
-
-
-async def set_kb_permission(knowledge_id: str, user_id: int | None, role: str) -> None:
-    """Set or update a permission for a knowledge base"""
-    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
-        await db.execute(
-            """
-            INSERT INTO kb_permissions (knowledge_id, user_id, role)
-            VALUES (?, ?, ?)
-            ON CONFLICT(knowledge_id, user_id) DO UPDATE SET role = ?
-            """,
-            (knowledge_id, user_id, role, role),
-        )
-        await db.commit()
+    return False
 
 
-async def get_kb_permissions(knowledge_id: str) -> list[dict]:
-    """Get all permissions for a knowledge base"""
-    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            """
-            SELECT p.*, u.username
-            FROM kb_permissions p
-            LEFT JOIN users u ON p.user_id = u.id
-            WHERE p.knowledge_id = ?
-            """,
-            (knowledge_id,),
-        ) as cursor:
-            rows = await cursor.fetchall()
-            return [dict(row) for row in rows]
+def require_access(required: str):
+    """FastAPI Depends factory. Extracts knowledge_id from path params."""
+
+    async def _check(
+        request: Request,
+        current_user: dict | None = Depends(get_current_user),
+    ):
+        knowledge_id = request.path_params.get("knowledge_id")
+        if not knowledge_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="缺少知识库ID",
+            )
+        user_id = current_user["id"] if current_user else None
+        has_access = await check_access(user_id, knowledge_id, required)
+        if not has_access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"需要 {required} 权限",
+            )
+        return current_user
+
+    return _check
 
 
-async def delete_kb_permission(perm_id: int) -> bool:
-    """Delete a permission entry"""
-    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
-        cursor = await db.execute("DELETE FROM kb_permissions WHERE id = ?", (perm_id,))
-        await db.commit()
-        return cursor.rowcount > 0
+def require_access_body(required: str):
+    """FastAPI Depends factory for endpoints where knowledge_id is in the request body."""
+
+    async def _check(
+        request: Request,
+        current_user: dict | None = Depends(get_current_user),
+    ):
+        import json as _json
+
+        body = await request.body()
+        try:
+            data = _json.loads(body)
+            knowledge_id = data.get("knowledge_id")
+        except (ValueError, UnicodeDecodeError):
+            knowledge_id = None
+
+        if not knowledge_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="缺少知识库ID",
+            )
+        user_id = current_user["id"] if current_user else None
+        has_access = await check_access(user_id, knowledge_id, required)
+        if not has_access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"需要 {required} 权限",
+            )
+        return current_user
+
+    return _check

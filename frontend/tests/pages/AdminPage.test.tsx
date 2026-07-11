@@ -16,6 +16,14 @@ vi.mock('../../src/lib/api', () => ({
       updateUserRole: vi.fn().mockResolvedValue({}),
       deleteUser: vi.fn().mockResolvedValue({}),
     },
+    groups: {
+      list: vi.fn().mockResolvedValue({ groups: [] }),
+      create: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue({}),
+      members: vi.fn().mockResolvedValue([]),
+      addMember: vi.fn().mockResolvedValue({}),
+      removeMember: vi.fn().mockResolvedValue({}),
+    },
   },
 }))
 

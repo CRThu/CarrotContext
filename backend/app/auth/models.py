@@ -44,3 +44,30 @@ class UserUpdateRole(BaseModel):
 
 class UserListResponse(BaseModel):
     users: list[UserResponse]
+
+
+class GroupCreate(BaseModel):
+    name: str
+    description: str = ""
+
+
+class GroupResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class GroupListResponse(BaseModel):
+    groups: list[GroupResponse]
+
+
+class GroupMemberRequest(BaseModel):
+    user_id: int
+
+
+class GroupMemberResponse(BaseModel):
+    user_id: int
+    username: str

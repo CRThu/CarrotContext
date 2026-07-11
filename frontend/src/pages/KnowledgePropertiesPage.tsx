@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { api } from '../lib/api'
-import type { Knowledge } from '../types'
+import type { Knowledge, PermissionGroup, AccessRule } from '../types'
 import {
   ArrowLeft,
   Save,
@@ -11,8 +11,18 @@ import {
   Calendar,
   User,
   Hash,
+  Shield,
+  Plus,
+  Trash2,
 } from 'lucide-react'
 import { ThemeToggle } from '../components/ThemeToggle'
+
+const ACCESS_LEVELS = [
+  { value: 'manage', label: '管理', description: '完全控制' },
+  { value: 'write', label: '写入', description: '编辑文件' },
+  { value: 'read', label: '只读', description: '查看内容' },
+  { value: 'none', label: '无权限', description: '拒绝访问' },
+]
 
 export default function KnowledgePropertiesPage() {
   const { id } = useParams<{ id: string }>()
@@ -29,13 +39,25 @@ export default function KnowledgePropertiesPage() {
   const [category, setCategory] = useState('')
   const [summary, setSummary] = useState('')
 
+  // Access rules state
+  const [rules, setRules] = useState<AccessRule[]>([])
+  const [groups, setGroups] = useState<PermissionGroup[]>([])
+  const [newRuleGroupId, setNewRuleGroupId] = useState<number | ''>('')
+  const [newRuleLevel, setNewRuleLevel] = useState('read')
+
   const user = useAuthStore((state) => state.user)
   const navigate = useNavigate()
 
   const canEdit = user?.role === 'admin'
 
   useEffect(() => {
-    if (id) loadKnowledge(id)
+    if (id) {
+      loadKnowledge(id)
+      if (canEdit) {
+        loadRules(id)
+        loadGroups()
+      }
+    }
   }, [id])
 
   const loadKnowledge = async (kbId: string) => {
@@ -51,6 +73,24 @@ export default function KnowledgePropertiesPage() {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadRules = async (kbId: string) => {
+    try {
+      const result = await api.permissions.list(kbId)
+      setRules(result.rules)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载权限失败')
+    }
+  }
+
+  const loadGroups = async () => {
+    try {
+      const result = await api.groups.list()
+      setGroups(result.groups)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载组失败')
     }
   }
 
@@ -78,6 +118,28 @@ export default function KnowledgePropertiesPage() {
     }
   }
 
+  const handleAddRule = async () => {
+    if (!id || newRuleGroupId === '') return
+    try {
+      await api.permissions.set(id, newRuleGroupId as number, newRuleLevel)
+      setNewRuleGroupId('')
+      setNewRuleLevel('read')
+      loadRules(id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '添加规则失败')
+    }
+  }
+
+  const handleDeleteRule = async (ruleId: number) => {
+    if (!id) return
+    try {
+      await api.permissions.delete(id, ruleId)
+      loadRules(id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除规则失败')
+    }
+  }
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
@@ -96,6 +158,10 @@ export default function KnowledgePropertiesPage() {
       </div>
     )
   }
+
+  const availableGroups = groups.filter(
+    (g) => !rules.some((r) => r.group_id === g.id)
+  )
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
@@ -253,6 +319,92 @@ export default function KnowledgePropertiesPage() {
               )}
             </div>
           </div>
+
+          {/* Access Rules */}
+          {canEdit && (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-6">
+              <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                访问规则
+              </h3>
+
+              {/* Existing rules */}
+              <div className="space-y-2 mb-4">
+                {rules.length === 0 ? (
+                  <p className="text-xs text-slate-400 dark:text-slate-500">暂无访问规则</p>
+                ) : (
+                  rules.map((rule) => (
+                    <div
+                      key={rule.id}
+                      className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          {rule.group_name || '匿名'}
+                        </span>
+                        <span className="text-xs text-slate-400">→</span>
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                          rule.access_level === 'manage'
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                            : rule.access_level === 'write'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                            : rule.access_level === 'read'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                        }`}>
+                          {ACCESS_LEVELS.find((l) => l.value === rule.access_level)?.label}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteRule(rule.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Add new rule */}
+              {availableGroups.length > 0 && (
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                  <select
+                    value={newRuleGroupId}
+                    onChange={(e) => setNewRuleGroupId(e.target.value ? Number(e.target.value) : '')}
+                    className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    <option value="">选择组...</option>
+                    {availableGroups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={newRuleLevel}
+                    onChange={(e) => setNewRuleLevel(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    {ACCESS_LEVELS.map((l) => (
+                      <option key={l.value} value={l.value}>{l.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAddRule}
+                    disabled={newRuleGroupId === ''}
+                    className="p-2 text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {groups.length === 0 && (
+                <p className="text-xs text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-700">
+                  请先在管理后台创建组
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </div>

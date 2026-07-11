@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 
-from app.config import settings
+from app.config import get_knowledge_path
 
 # Known binary file extensions
 BINARY_EXTENSIONS = {
@@ -11,10 +11,6 @@ BINARY_EXTENSIONS = {
     "mp3", "mp4", "avi", "mov", "wmv",
     "exe", "dll", "so", "dylib",
 }
-
-
-def get_knowledge_path(knowledge_id: str) -> Path:
-    return settings.KNOWLEDGE_BASE_PATH / knowledge_id
 
 
 def get_file_tree(knowledge_id: str, path: str = "") -> list[dict]:
