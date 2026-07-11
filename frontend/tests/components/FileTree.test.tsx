@@ -37,4 +37,41 @@ describe('FileTree', () => {
     fireEvent.click(screen.getByText('README.md'))
     expect(onSelect).toHaveBeenCalledWith('README.md')
   })
+
+  it('makes items draggable', () => {
+    const onSelect = vi.fn()
+    render(<FileTree tree={mockTree} onSelect={onSelect} selectedPath={null} />)
+    const items = document.querySelectorAll('[draggable="true"]')
+    expect(items.length).toBe(2)
+    items.forEach((item) => {
+      expect(item).toHaveAttribute('draggable', 'true')
+    })
+  })
+
+  it('calls onMove when file is dropped on folder', () => {
+    const onSelect = vi.fn()
+    const onMove = vi.fn()
+    render(<FileTree tree={mockTree} onSelect={onSelect} selectedPath={null} onMove={onMove} />)
+
+    const folder = screen.getByText('src')
+    const file = screen.getByText('README.md')
+
+    // Simulate drag and drop
+    const dragStartEvent = new Event('dragstart', { bubbles: true })
+    Object.defineProperty(dragStartEvent, 'dataTransfer', {
+      value: { setData: vi.fn(), effectAllowed: '' },
+    })
+    fireEvent(file, dragStartEvent)
+
+    const dropEvent = new Event('drop', { bubbles: true })
+    Object.defineProperty(dropEvent, 'dataTransfer', {
+      value: {
+        getData: vi.fn().mockReturnValue('README.md'),
+        preventDefault: vi.fn(),
+      },
+    })
+    fireEvent(folder, dropEvent)
+
+    expect(onMove).toHaveBeenCalledWith('README.md', 'src/README.md')
+  })
 })

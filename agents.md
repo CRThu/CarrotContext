@@ -22,19 +22,51 @@ carrotcontext/
 │   │   ├── config.py          # 配置管理
 │   │   ├── database.py        # SQLite管理
 │   │   ├── auth/              # 认证模块
+│   │   │   ├── router.py      # 认证路由（注册、登录、用户管理）
+│   │   │   ├── service.py     # JWT、密码哈希
+│   │   │   └── models.py      # 数据模型
 │   │   ├── knowledge/         # 知识管理
+│   │   │   ├── router.py      # KB CRUD + 权限管理
+│   │   │   ├── service.py     # manifest读写
+│   │   │   ├── manifest.py    # manifest文件操作
+│   │   │   ├── models.py      # 数据模型
+│   │   │   └── permissions.py # 权限检查服务
+│   │   ├── files/             # 文件操作
+│   │   │   ├── router.py      # 文件读写、移动、上传、下载
+│   │   │   └── service.py     # 文件操作服务
 │   │   ├── lock/              # 文件锁定
 │   │   ├── search/            # 搜索功能
 │   │   ├── git/               # Git集成（GitPython）
 │   │   └── mcp/               # MCP服务（SSE协议）
+│   │       ├── server.py
+│   │       ├── tools.py
+│   │       └── auth.py        # MCP认证中间件
 │   ├── tests/
 │   └── pyproject.toml
 ├── frontend/                  # Vite + React前端
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── ThemeToggle.tsx     # 主题切换按钮
+│   │   │   ├── Auth/              # 认证相关组件
+│   │   │   ├── CodeEditor/        # 代码编辑器
+│   │   │   ├── FileTree/          # 文件树（支持拖拽）
+│   │   │   ├── GitHistory/        # Git历史查看
+│   │   │   ├── MarkdownEditor/    # Markdown编辑
+│   │   │   ├── MarkdownViewer/    # Markdown预览
+│   │   │   └── Search/            # 搜索组件
 │   │   ├── pages/
+│   │   │   ├── LoginPage.tsx
+│   │   │   ├── RegisterPage.tsx
+│   │   │   ├── DashboardPage.tsx
+│   │   │   ├── KnowledgePage.tsx
+│   │   │   ├── KnowledgePropertiesPage.tsx
+│   │   │   └── AdminPage.tsx
 │   │   ├── stores/
-│   │   └── lib/
+│   │   │   ├── authStore.ts       # 认证状态
+│   │   │   ├── knowledgeStore.ts  # 知识库状态
+│   │   │   └── themeStore.ts      # 主题状态
+│   │   ├── lib/api.ts            # API客户端
+│   │   └── types/                 # TypeScript类型
 │   ├── Caddyfile              # Caddy配置（Docker部署）
 │   └── tests/
 ├── data/                      # 知识库存储
@@ -181,12 +213,20 @@ async with ClientSession(transport) as session:
 - JWT token认证（python-jose）
 - 用户注册/登录
 - 密码使用bcrypt哈希
+- 管理员角色管理（用户列表、角色修改、删除用户）
+- 首个注册用户自动成为管理员
 
 ### 知识管理 (knowledge)
 - 文件系统存储，每个根节点有.manifest.json
 - 支持文件/目录的CRUD操作
 - 文件上传支持
 - 知识库分类和标签系统
+- 权限管理（admin/editor/viewer三级权限）
+
+### 文件操作 (files)
+- 文件读写、移动、上传
+- 二进制文件下载（支持图片、PDF、压缩包等）
+- 二进制文件检测（扩展名 + UTF-8解码验证）
 
 ### 文件锁定 (lock)
 - 悲观锁实现，基于.lock文件
@@ -204,7 +244,14 @@ async with ClientSession(transport) as session:
 - SSE (Server-Sent Events) 协议
 - 基于 FastMCP SDK
 - 提供9个知识库访问工具
+- 支持可选JWT认证（匿名用户使用默认权限）
 - 通过Caddy反向代理访问
+
+### 前端主题系统
+- 支持浅色/深色/跟随系统三种模式
+- 使用Zustand持久化到localStorage
+- Tailwind CSS 4 `dark:` 原生支持
+- Monaco编辑器主题自动切换
 
 ## API 端点
 
@@ -212,6 +259,9 @@ async with ClientSession(transport) as session:
 - `POST /api/auth/register` - 用户注册
 - `POST /api/auth/login` - 用户登录
 - `GET /api/auth/me` - 获取当前用户
+- `GET /api/auth/users` - 用户列表（管理员）
+- `PUT /api/auth/users/{id}/role` - 修改用户角色（管理员）
+- `DELETE /api/auth/users/{id}` - 删除用户（管理员）
 
 ### 知识库
 - `GET /api/knowledge` - 列表
@@ -220,9 +270,15 @@ async with ClientSession(transport) as session:
 - `PUT /api/knowledge/{id}` - 更新
 - `DELETE /api/knowledge/{id}` - 删除
 - `GET /api/knowledge/{id}/tree` - 文件树
-- `GET /api/knowledge/{id}/file/{path}` - 文件内容
-- `PUT /api/knowledge/{id}/file/{path}` - 更新文件
-- `POST /api/knowledge/{id}/directory` - 创建目录
+- `GET /api/knowledge/{id}/files/{path}` - 文件内容
+- `PUT /api/knowledge/{id}/files/{path}` - 更新文件
+- `POST /api/knowledge/{id}/files/move` - 移动文件
+- `POST /api/knowledge/{id}/files/upload` - 上传文件
+- `GET /api/knowledge/{id}/files/{path}/raw` - 下载二进制文件
+- `POST /api/knowledge/{id}/dirs` - 创建目录
+- `GET /api/knowledge/{id}/permissions` - 权限列表（管理员）
+- `POST /api/knowledge/{id}/permissions` - 设置权限（管理员）
+- `DELETE /api/knowledge/{id}/permissions/{perm_id}` - 删除权限（管理员）
 
 ### 搜索
 - `GET /api/search?q={query}` - 搜索
@@ -240,7 +296,7 @@ async with ClientSession(transport) as session:
 - `POST /api/git/{id}/revert` - 回滚
 
 ### MCP
-- `GET /mcp/sse` - MCP SSE 端点
+- `GET /mcp/sse` - MCP SSE 端点（支持可选JWT认证）
 
 ## 常用命令
 

@@ -2,6 +2,7 @@ export interface User {
   id: number
   username: string
   email: string
+  role: 'admin' | 'user'
   created_at: string
   updated_at: string
 }
@@ -32,6 +33,7 @@ export interface FileContent {
   content: string
   size: number
   modified_at: string
+  is_binary?: boolean
 }
 
 export interface LockStatus {

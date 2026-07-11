@@ -1,4 +1,5 @@
 import Editor from '@monaco-editor/react'
+import { useThemeStore } from '../../stores/themeStore'
 
 interface CodeEditorProps {
   content: string
@@ -15,6 +16,8 @@ export default function CodeEditor({
   readOnly = false,
   height = '100%',
 }: CodeEditorProps) {
+  const resolvedTheme = useThemeStore((state) => state.resolvedTheme)
+
   const handleChange = (value: string | undefined) => {
     if (value !== undefined) {
       onChange(value)
@@ -22,12 +25,13 @@ export default function CodeEditor({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm" style={{ height }}>
+    <div className={`rounded-xl border overflow-hidden shadow-sm ${resolvedTheme === 'dark' ? 'border-slate-600' : 'border-slate-200'}`} style={{ height }}>
       <Editor
         height="100%"
         language={language}
         value={content}
         onChange={handleChange}
+        theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
         options={{
           readOnly,
           minimap: { enabled: false },

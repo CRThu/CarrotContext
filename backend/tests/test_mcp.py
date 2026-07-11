@@ -439,3 +439,57 @@ class TestMCPToolSchemas:
         # 测试默认参数（空字符串转None）
         result = commit_changes(kb_id, "test commit", "")
         assert isinstance(result, str)
+
+
+# ========== MCP Authentication Tests ==========
+
+
+class TestMCPAuth:
+    """测试MCP认证和权限"""
+
+    def test_middleware_class_exists(self):
+        """测试中间件类存在"""
+        from app.mcp.server import MCPAuthMiddleware
+        assert MCPAuthMiddleware is not None
+
+    def test_middleware_initialization(self):
+        """测试中间件初始化"""
+        from app.mcp.server import MCPAuthMiddleware
+
+        async def dummy_app(scope, receive, send):
+            pass
+
+        middleware = MCPAuthMiddleware(dummy_app)
+        assert middleware.app == dummy_app
+
+    def test_auth_module_functions(self):
+        """测试auth模块函数存在"""
+        from app.mcp.auth import set_mcp_user, get_mcp_user
+        assert callable(set_mcp_user)
+        assert callable(get_mcp_user)
+
+    def test_tools_import_with_permission_check(self):
+        """测试工具函数导入正常"""
+        from app.mcp.tools import update_file, create_new_knowledge, commit_changes
+        assert callable(update_file)
+        assert callable(create_new_knowledge)
+        assert callable(commit_changes)
+
+
+class TestMCPAuthMiddleware:
+    """测试MCP认证中间件"""
+
+    def test_middleware_class_exists(self):
+        """测试中间件类存在"""
+        from app.mcp.server import MCPAuthMiddleware
+        assert MCPAuthMiddleware is not None
+
+    def test_middleware_initialization(self):
+        """测试中间件初始化"""
+        from app.mcp.server import MCPAuthMiddleware
+
+        async def dummy_app(scope, receive, send):
+            pass
+
+        middleware = MCPAuthMiddleware(dummy_app)
+        assert middleware.app == dummy_app

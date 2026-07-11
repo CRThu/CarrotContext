@@ -16,9 +16,11 @@ interface FileTreeProps {
   tree: TreeNode[]
   onSelect: (path: string) => void
   selectedPath: string | null
+  knowledgeId?: string
+  onMove?: (sourcePath: string, destPath: string) => void
 }
 
-export default function FileTree({ tree, onSelect, selectedPath }: FileTreeProps) {
+export default function FileTree({ tree, onSelect, selectedPath, knowledgeId, onMove }: FileTreeProps) {
   return (
     <div className="py-1 px-1">
       {tree.map((node) => (
@@ -28,6 +30,8 @@ export default function FileTree({ tree, onSelect, selectedPath }: FileTreeProps
           onSelect={onSelect}
           selectedPath={selectedPath}
           depth={0}
+          knowledgeId={knowledgeId}
+          onMove={onMove}
         />
       ))}
     </div>
@@ -39,10 +43,13 @@ interface FileTreeItemProps {
   onSelect: (path: string) => void
   selectedPath: string | null
   depth: number
+  knowledgeId?: string
+  onMove?: (sourcePath: string, destPath: string) => void
 }
 
-function FileTreeItem({ node, onSelect, selectedPath, depth }: FileTreeItemProps) {
+function FileTreeItem({ node, onSelect, selectedPath, depth, knowledgeId, onMove }: FileTreeItemProps) {
   const [expanded, setExpanded] = useState(false)
+  const [isDragOver, setIsDragOver] = useState(false)
   const isSelected = selectedPath === node.path
   const paddingLeft = `${depth * 16 + 8}px`
 
@@ -54,30 +61,62 @@ function FileTreeItem({ node, onSelect, selectedPath, depth }: FileTreeItemProps
     }
   }
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', node.path)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (node.is_dir) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setIsDragOver(true)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const sourcePath = e.dataTransfer.getData('text/plain')
+    if (sourcePath && sourcePath !== node.path && onMove) {
+      const destPath = node.is_dir ? `${node.path}/${sourcePath.split('/').pop()}` : node.path
+      onMove(sourcePath, destPath)
+    }
+  }
+
   return (
     <div>
       <div
         className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer text-sm transition-colors ${
           isSelected
-            ? 'bg-blue-50 text-blue-600 font-medium'
-            : 'text-slate-600 hover:bg-slate-100'
-        }`}
+            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+        } ${isDragOver ? 'bg-blue-100 dark:bg-blue-800/40 ring-2 ring-blue-300 dark:ring-blue-600' : ''}`}
         style={{ paddingLeft }}
         onClick={handleClick}
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {node.is_dir ? (
           <>
             <span className="flex-shrink-0">
               {expanded ? (
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
               ) : (
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
               )}
             </span>
             {expanded ? (
-              <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <FolderOpen className="w-4 h-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
             ) : (
-              <Folder className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <Folder className="w-4 h-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
             )}
           </>
         ) : (
@@ -89,7 +128,7 @@ function FileTreeItem({ node, onSelect, selectedPath, depth }: FileTreeItemProps
         <span className="truncate">{node.name}</span>
       </div>
       {node.is_dir && expanded && node.children && (
-        <div className="border-l border-slate-100 ml-4">
+        <div className="border-l border-slate-100 dark:border-slate-600 ml-4">
           {node.children.map((child) => (
             <FileTreeItem
               key={child.path}
@@ -97,6 +136,8 @@ function FileTreeItem({ node, onSelect, selectedPath, depth }: FileTreeItemProps
               onSelect={onSelect}
               selectedPath={selectedPath}
               depth={depth + 1}
+              knowledgeId={knowledgeId}
+              onMove={onMove}
             />
           ))}
         </div>
@@ -107,19 +148,19 @@ function FileTreeItem({ node, onSelect, selectedPath, depth }: FileTreeItemProps
 
 function getFileIcon(name: string): JSX.Element {
   if (name.endsWith('.md') || name.endsWith('.markdown')) {
-    return <FileText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+    return <FileText className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
   }
   if (name.endsWith('.py')) {
-    return <FileCode className="w-4 h-4 text-green-500 flex-shrink-0" />
+    return <FileCode className="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" />
   }
   if (name.endsWith('.js') || name.endsWith('.ts') || name.endsWith('.jsx') || name.endsWith('.tsx')) {
-    return <FileCode className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+    return <FileCode className="w-4 h-4 text-yellow-500 dark:text-yellow-400 flex-shrink-0" />
   }
   if (name.endsWith('.json')) {
-    return <FileJson className="w-4 h-4 text-orange-400 flex-shrink-0" />
+    return <FileJson className="w-4 h-4 text-orange-400 dark:text-orange-300 flex-shrink-0" />
   }
   if (name.endsWith('.yaml') || name.endsWith('.yml')) {
-    return <FileCog className="w-4 h-4 text-purple-400 flex-shrink-0" />
+    return <FileCog className="w-4 h-4 text-purple-400 dark:text-purple-300 flex-shrink-0" />
   }
-  return <File className="w-4 h-4 text-slate-400 flex-shrink-0" />
+  return <File className="w-4 h-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
 }

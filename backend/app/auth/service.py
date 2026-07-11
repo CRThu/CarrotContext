@@ -44,9 +44,15 @@ async def get_user_by_id(user_id: int) -> dict | None:
 async def create_user(username: str, email: str, password: str) -> dict:
     hashed_password = get_password_hash(password)
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        # First user becomes admin
+        async with db.execute("SELECT COUNT(*) as cnt FROM users") as cursor:
+            row = await cursor.fetchone()
+            is_first_user = row[0] == 0
+
+        role = "admin" if is_first_user else "user"
         cursor = await db.execute(
-            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-            (username, email, hashed_password),
+            "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
+            (username, email, hashed_password, role),
         )
         await db.commit()
         user_id = cursor.lastrowid
@@ -70,3 +76,30 @@ async def decode_token(token: str) -> dict | None:
         return {"username": username, "user_id": user_id}
     except JWTError:
         return None
+
+
+async def get_all_users() -> list[dict]:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users ORDER BY id") as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def update_user_role(user_id: int, role: str) -> dict | None:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            "UPDATE users SET role = ? WHERE id = ?",
+            (role, user_id),
+        )
+        await db.commit()
+        if cursor.rowcount == 0:
+            return None
+        return await get_user_by_id(user_id)
+
+
+async def delete_user(user_id: int) -> bool:
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        await db.commit()
+        return cursor.rowcount > 0

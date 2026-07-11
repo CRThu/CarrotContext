@@ -5,8 +5,9 @@ import { api } from '../lib/api'
 import { BookOpen } from 'lucide-react'
 import { ThemeToggle } from '../components/ThemeToggle'
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,18 +21,19 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const result = await api.auth.login(username, password)
-      login(result.access_token)
-      // Fetch user info to get role
+      await api.auth.register(username, email, password)
+      // Auto-login after registration
+      const loginResult = await api.auth.login(username, password)
+      login(loginResult.access_token)
       try {
         const user = await api.auth.me()
         setUser(user)
       } catch {
-        // Ignore - will work without role info
+        // Ignore
       }
       navigate('/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败')
+      setError(err instanceof Error ? err.message : '注册失败')
     } finally {
       setLoading(false)
     }
@@ -39,23 +41,20 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 relative overflow-hidden">
-      {/* Theme toggle */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
 
-      {/* Decorative background orbs */}
       <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-100/60 dark:bg-blue-900/30 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-indigo-100/60 dark:bg-indigo-900/30 rounded-full blur-3xl" />
 
       <div className="relative max-w-md w-full mx-4 space-y-8 p-10 bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 border border-slate-100 dark:border-slate-700 animate-fade-in">
-        {/* Logo */}
         <div className="flex flex-col items-center">
           <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 mb-4">
             <BookOpen className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">CarrotContext</h1>
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">企业知识库管理系统</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">注册新账号</h1>
+          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">创建您的CarrotContext账号</p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
@@ -81,6 +80,21 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-1.5">
+            <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              邮箱
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              placeholder="请输入邮箱"
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               密码
             </label>
@@ -100,16 +114,16 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full py-2.5 px-4 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 dark:focus:ring-offset-slate-800 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? '登录中...' : '登录'}
+            {loading ? '注册中...' : '注册'}
           </button>
 
           <div className="text-center text-sm text-slate-500 dark:text-slate-400">
-            还没有账号？{' '}
+            已有账号？{' '}
             <Link
-              to="/register"
+              to="/login"
               className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
             >
-              注册新账号
+              返回登录
             </Link>
           </div>
         </form>

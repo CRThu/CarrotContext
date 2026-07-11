@@ -35,14 +35,18 @@ app/
 ├── config.py          # 配置管理（pydantic-settings）
 ├── database.py        # SQLite 数据库管理
 ├── auth/              # JWT 认证模块
-│   ├── router.py      # API 路由
+│   ├── router.py      # 认证路由（注册、登录、用户管理）
 │   ├── service.py     # 业务逻辑
 │   └── models.py      # 数据模型
 ├── knowledge/         # 知识库管理
-│   ├── router.py
-│   ├── service.py
+│   ├── router.py      # KB CRUD + 权限管理
+│   ├── service.py     # manifest读写
 │   ├── manifest.py    # manifest.json 管理
-│   └── models.py
+│   ├── models.py      # 数据模型
+│   └── permissions.py # 权限检查服务（admin/editor/viewer）
+├── files/             # 文件操作
+│   ├── router.py      # 文件读写、移动、上传、下载
+│   └── service.py     # 文件操作服务
 ├── lock/              # 文件锁定
 │   ├── router.py
 │   ├── service.py
@@ -56,7 +60,8 @@ app/
 │   └── models.py
 └── mcp/               # MCP 服务（SSE 协议）
     ├── server.py
-    └── tools.py
+    ├── tools.py
+    └── auth.py        # MCP认证中间件
 ```
 
 ## 环境变量

@@ -1,14 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.auth.models import LoginRequest, Token, UserCreate, UserResponse
+from app.auth.models import (
+    LoginRequest,
+    Token,
+    UserCreate,
+    UserListResponse,
+    UserResponse,
+    UserUpdateRole,
+)
 from app.auth.service import (
     authenticate_user,
     create_access_token,
     create_user,
     decode_token,
+    delete_user,
+    get_all_users,
     get_user_by_id,
     get_user_by_username,
+    update_user_role,
 )
 
 router = APIRouter()
@@ -31,6 +41,15 @@ async def get_current_user(
             detail="用户不存在",
         )
     return user
+
+
+async def require_admin(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要管理员权限",
+        )
+    return current_user
 
 
 @router.post("/register", response_model=UserResponse)
@@ -65,3 +84,53 @@ async def login(user: LoginRequest):
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/users", response_model=UserListResponse)
+async def list_users(admin: dict = Depends(require_admin)):
+    users = await get_all_users()
+    return UserListResponse(users=users)
+
+
+@router.put("/users/{user_id}/role", response_model=UserResponse)
+async def change_user_role(
+    user_id: int,
+    role_update: UserUpdateRole,
+    admin: dict = Depends(require_admin),
+):
+    if role_update.role not in ("admin", "user"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的角色值",
+        )
+    if user_id == admin["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能修改自己的角色",
+        )
+    user = await update_user_role(user_id, role_update.role)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在",
+        )
+    return user
+
+
+@router.delete("/users/{user_id}")
+async def remove_user(
+    user_id: int,
+    admin: dict = Depends(require_admin),
+):
+    if user_id == admin["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能删除自己",
+        )
+    success = await delete_user(user_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在",
+        )
+    return {"message": "用户已删除"}

@@ -1,26 +1,31 @@
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
-from app.auth.router import get_current_user
+from app.auth.router import get_current_user, require_admin
 from app.knowledge.models import (
-    FileContent,
     KnowledgeCreate,
     KnowledgeResponse,
     KnowledgeUpdate,
-    TreeNode,
+)
+from app.knowledge.permissions import (
+    delete_kb_permission,
+    get_kb_permissions,
+    set_kb_permission,
 )
 from app.knowledge.service import (
-    create_directory,
     create_knowledge,
-    get_file_content,
-    get_file_tree,
     get_knowledge,
     list_knowledge,
     remove_knowledge,
-    update_file_content,
     update_knowledge,
 )
 
 router = APIRouter()
+
+
+class PermissionRequest(BaseModel):
+    user_id: int | None = None  # None = anonymous
+    role: str  # "admin", "editor", "viewer"
 
 
 @router.get("", response_model=list[KnowledgeResponse])
@@ -95,57 +100,40 @@ async def delete_knowledge_api(
     return {"message": "删除成功"}
 
 
-@router.get("/{knowledge_id}/tree", response_model=list[TreeNode])
-async def get_tree_api(
+@router.get("/{knowledge_id}/permissions")
+async def get_permissions_api(
     knowledge_id: str,
-    path: str = "",
-    current_user: dict = Depends(get_current_user),
+    admin: dict = Depends(require_admin),
 ):
-    return get_file_tree(knowledge_id, path)
+    permissions = await get_kb_permissions(knowledge_id)
+    return {"permissions": permissions}
 
 
-@router.get(
-    "/{knowledge_id}/file/{file_path:path}",
-    response_model=FileContent,
-)
-async def get_file_api(
+@router.post("/{knowledge_id}/permissions")
+async def set_permission_api(
     knowledge_id: str,
-    file_path: str,
-    current_user: dict = Depends(get_current_user),
+    perm: PermissionRequest,
+    admin: dict = Depends(require_admin),
 ):
-    content = get_file_content(knowledge_id, file_path)
-    if not content:
+    if perm.role not in ("admin", "editor", "viewer"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的角色值",
+        )
+    await set_kb_permission(knowledge_id, perm.user_id, perm.role)
+    return {"message": "权限已设置"}
+
+
+@router.delete("/{knowledge_id}/permissions/{perm_id}")
+async def delete_permission_api(
+    knowledge_id: str,
+    perm_id: int,
+    admin: dict = Depends(require_admin),
+):
+    success = await delete_kb_permission(perm_id)
+    if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="文件不存在",
+            detail="权限不存在",
         )
-    return content
-
-
-@router.put("/{knowledge_id}/file/{file_path:path}")
-async def update_file_api(
-    knowledge_id: str,
-    file_path: str,
-    content: str = Body(..., media_type="text/plain"),
-    current_user: dict = Depends(get_current_user),
-):
-    if not update_file_content(knowledge_id, file_path, content):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="更新失败",
-        )
-    return {"message": "更新成功"}
-
-
-@router.post("/{knowledge_id}/directory")
-async def create_dir_api(
-    knowledge_id: str,
-    dir_path: str,
-    current_user: dict = Depends(get_current_user),
-):
-    if not create_directory(knowledge_id, dir_path):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="目录已存在",
-        )
-    return {"message": "创建成功"}
+    return {"message": "权限已删除"}

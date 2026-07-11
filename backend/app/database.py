@@ -26,6 +26,7 @@ async def init_db():
                 username TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -46,4 +47,31 @@ async def init_db():
             )
         """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kb_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                knowledge_id TEXT NOT NULL,
+                user_id INTEGER,
+                role TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(knowledge_id, user_id)
+            )
+        """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """
+        )
         await db.commit()
+
+        # Migration: Add role column to existing users if missing
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+            await db.commit()
+        except Exception:
+            pass  # Column already exists

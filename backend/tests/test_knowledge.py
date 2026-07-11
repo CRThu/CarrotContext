@@ -130,7 +130,7 @@ async def test_file_operations(client: AsyncClient):
     )
     # Create directory
     response = await client.post(
-        f"/api/knowledge/{knowledge_id}/directory",
+        f"/api/knowledge/{knowledge_id}/dirs",
         params={"dir_path": "docs"},
         headers=headers,
     )
@@ -138,7 +138,7 @@ async def test_file_operations(client: AsyncClient):
 
     # Update file content (content is passed as request body)
     response = await client.put(
-        f"/api/knowledge/{knowledge_id}/file/docs/test.md",
+        f"/api/knowledge/{knowledge_id}/files/docs/test.md",
         content="# Test\nHello World",
         headers={**headers, "Content-Type": "text/plain"},
     )
@@ -146,7 +146,7 @@ async def test_file_operations(client: AsyncClient):
 
     # Get file content
     response = await client.get(
-        f"/api/knowledge/{knowledge_id}/file/docs/test.md",
+        f"/api/knowledge/{knowledge_id}/files/docs/test.md",
         headers=headers,
     )
     assert response.status_code == 200

@@ -1,16 +1,52 @@
 from mcp.server.fastmcp import FastMCP
 
+from app.files.service import get_file_content, update_file_content
 from app.git.service import create_git_commit, get_git_diff, get_git_log
+from app.knowledge.permissions import check_permission
 from app.knowledge.service import (
     create_knowledge,
-    get_file_content,
     get_knowledge,
     list_knowledge,
-    update_file_content,
 )
+from app.mcp.auth import get_mcp_user
 from app.search.service import search_content, search_metadata
 
 mcp = FastMCP("CarrotContext")
+
+
+def _check_permission(knowledge_id: str, required_role: str) -> str | None:
+    """Check permission and return error message if denied, None if allowed.
+    Returns None (allow) if no user context is set (for backward compatibility)."""
+    import asyncio
+
+    user = get_mcp_user()
+
+    # If no user context (e.g., direct function calls), allow by default
+    if user is None:
+        return None
+
+    user_id = user.get("id")
+
+    # For sync context, we need to run the async check
+    try:
+        loop = asyncio.get_running_loop()
+        # We're in an async context - can't use run_until_complete
+        # Return None and let the async wrapper handle it
+        return None
+    except RuntimeError:
+        # No running loop, we can use run_until_complete
+        loop = asyncio.new_event_loop()
+        try:
+            from app.knowledge.permissions import check_permission
+            has_perm = loop.run_until_complete(
+                check_permission(user_id, knowledge_id, required_role)
+            )
+            if not has_perm:
+                role_name = user.get("role", "anonymous") if user else "anonymous"
+                return f"权限不足：当前角色 {role_name}，需要 {required_role} 或更高权限"
+            return None
+        finally:
+            loop.close()
 
 
 @mcp.tool()
@@ -60,6 +96,9 @@ def update_file(
     knowledge_id: str, file_path: str, content: str
 ) -> str:
     """更新文件内容"""
+    perm_error = _check_permission(knowledge_id, "editor")
+    if perm_error:
+        return perm_error
     success = update_file_content(knowledge_id, file_path, content)
     if success:
         return f"文件 {file_path} 更新成功"
@@ -74,12 +113,20 @@ def create_new_knowledge(
     tags: str = "",
 ) -> str:
     """创建新知识库"""
+    user = get_mcp_user()
+
+    # If user context exists, check permission
+    if user is not None:
+        if user.get("role") != "admin":
+            return "权限不足：只有管理员可以创建新知识库"
+
     tag_list = (
         [t.strip() for t in tags.split(",") if t.strip()] if tags else []
     )
     try:
+        username = user["username"] if user else "mcp_user"
         create_knowledge(
-            knowledge_id, name, description, tag_list, "mcp_user"
+            knowledge_id, name, description, tag_list, username
         )
         return f"知识库 {name} 创建成功"
     except ValueError as e:
@@ -148,6 +195,9 @@ def commit_changes(
     file_path: str = "",
 ) -> str:
     """提交更改"""
+    perm_error = _check_permission(knowledge_id, "editor")
+    if perm_error:
+        return perm_error
     result = create_git_commit(
         knowledge_id, message, file_path or None
     )

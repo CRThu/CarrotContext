@@ -19,12 +19,19 @@
 |:---:|:---|
 |  | **知识库管理** - 创建、浏览、删除知识库，支持分类和标签 |
 |  | **文件树浏览** - 支持文件夹展开/折叠的树形结构 |
+|  | **文件拖拽移动** - 支持文件拖拽到文件夹进行移动 |
+|  | **文件上传** - 支持图片、PDF、压缩包等二进制文件上传 |
 |  | **Markdown 预览** - 实时渲染，支持表格、代码高亮 |
 |  | **代码编辑器** - VSCode 风格的 Monaco Editor |
 |  | **JWT 认证** - 安全的用户登录系统 |
+|  | **用户管理** - 管理员角色，用户注册、角色修改、删除 |
+|  | **权限管理** - 知识库级别权限（admin/editor/viewer） |
+|  | **知识库属性** - 查看和编辑知识库元数据 |
 |  | **文件锁定** - 悲观锁防止多人同时编辑冲突 |
 |  | **Git 集成** - 使用 GitPython 进行版本控制 |
+|  | **Git 历史查看** - 查看提交历史、差异对比、版本回滚 |
 |  | **全文搜索** - BM25 元数据搜索 + 文件内容搜索 |
+|  | **主题切换** - 浅色/深色/跟随系统三种模式 |
 |  | **MCP 服务** - SSE 协议，支持外部 Agent 访问 |
 
 ## 页面展示
@@ -213,12 +220,13 @@ CarrotContext/
 │   │   ├── main.py            # FastAPI 入口
 │   │   ├── config.py          # 配置管理
 │   │   ├── database.py        # SQLite 管理
-│   │   ├── auth/              # 认证模块
-│   │   ├── knowledge/         # 知识管理
+│   │   ├── auth/              # 认证模块（注册、登录、用户管理）
+│   │   ├── knowledge/         # 知识管理（CRUD + 权限）
+│   │   ├── files/             # 文件操作（读写、移动、上传、下载）
 │   │   ├── lock/              # 文件锁定
 │   │   ├── search/            # 搜索功能
 │   │   ├── git/               # Git 集成
-│   │   └── mcp/               # MCP 服务
+│   │   └── mcp/               # MCP 服务（SSE + 认证）
 │   ├── tests/
 │   └── pyproject.toml
 ├── frontend/                  # React 前端
@@ -245,6 +253,9 @@ CarrotContext/
 | POST | `/api/auth/register` | 用户注册 |
 | POST | `/api/auth/login` | 用户登录，返回 JWT token |
 | GET | `/api/auth/me` | 获取当前用户信息 |
+| GET | `/api/auth/users` | 用户列表（管理员） |
+| PUT | `/api/auth/users/{id}/role` | 修改用户角色（管理员） |
+| DELETE | `/api/auth/users/{id}` | 删除用户（管理员） |
 
 ### 知识库 API
 
@@ -256,9 +267,15 @@ CarrotContext/
 | PUT | `/api/knowledge/{id}` | 更新知识库信息 |
 | DELETE | `/api/knowledge/{id}` | 删除知识库 |
 | GET | `/api/knowledge/{id}/tree` | 获取文件树 |
-| GET | `/api/knowledge/{id}/file/{path}` | 获取文件内容 |
-| PUT | `/api/knowledge/{id}/file/{path}` | 更新文件内容 |
-| POST | `/api/knowledge/{id}/directory` | 创建目录 |
+| GET | `/api/knowledge/{id}/files/{path}` | 获取文件内容 |
+| PUT | `/api/knowledge/{id}/files/{path}` | 更新文件内容 |
+| POST | `/api/knowledge/{id}/files/move` | 移动文件 |
+| POST | `/api/knowledge/{id}/files/upload` | 上传文件 |
+| GET | `/api/knowledge/{id}/files/{path}/raw` | 下载二进制文件 |
+| POST | `/api/knowledge/{id}/dirs` | 创建目录 |
+| GET | `/api/knowledge/{id}/permissions` | 权限列表（管理员） |
+| POST | `/api/knowledge/{id}/permissions` | 设置权限（管理员） |
+| DELETE | `/api/knowledge/{id}/permissions/{perm_id}` | 删除权限（管理员） |
 
 ### 搜索 API
 
@@ -290,7 +307,7 @@ CarrotContext/
 |:---:|:---|:---|
 | GET | `/` | API 欢迎信息 |
 | GET | `/health` | 健康检查 |
-| GET | `/mcp/sse` | MCP SSE 服务端点 |
+| GET | `/mcp/sse` | MCP SSE 服务端点（支持可选JWT认证） |
 
 ## 配置
 

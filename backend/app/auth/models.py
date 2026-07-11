@@ -21,6 +21,7 @@ class LoginRequest(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    role: str = "user"
     created_at: datetime
     updated_at: datetime
 
@@ -35,3 +36,11 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: str | None = None
     user_id: int | None = None
+
+
+class UserUpdateRole(BaseModel):
+    role: str  # "admin" or "user"
+
+
+class UserListResponse(BaseModel):
+    users: list[UserResponse]

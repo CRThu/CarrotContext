@@ -104,7 +104,7 @@ async def test_create_commit(client: AsyncClient):
     )
     # Create a file first (content is passed as request body)
     await client.put(
-        f"/api/knowledge/{knowledge_id}/file/test.md",
+        f"/api/knowledge/{knowledge_id}/files/test.md",
         content="# Test",
         headers={**headers, "Content-Type": "text/plain"},
     )
@@ -141,7 +141,7 @@ async def test_revert_commit(client: AsyncClient):
     )
     # Create and commit a file
     await client.put(
-        f"/api/knowledge/{knowledge_id}/file/test.md",
+        f"/api/knowledge/{knowledge_id}/files/test.md",
         content="# Test",
         headers={**headers, "Content-Type": "text/plain"},
     )

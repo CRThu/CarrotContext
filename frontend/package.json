@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
+    "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.0.0",
     "@testing-library/jest-dom": "^6.1.0",

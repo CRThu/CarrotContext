@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth.router import router as auth_router
 from app.config import ensure_directories, settings
 from app.database import init_db
+from app.files.router import router as files_router
 from app.git.router import router as git_router
 from app.knowledge.router import router as knowledge_router
 from app.lock.router import router as lock_router
@@ -39,6 +40,9 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["认证"])
 app.include_router(
     knowledge_router, prefix="/api/knowledge", tags=["知识管理"]
+)
+app.include_router(
+    files_router, prefix="/api/knowledge", tags=["文件操作"]
 )
 app.include_router(lock_router, prefix="/api/lock", tags=["文件锁定"])
 app.include_router(search_router, prefix="/api/search", tags=["搜索"])
