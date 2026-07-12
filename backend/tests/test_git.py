@@ -1,7 +1,19 @@
 import uuid
+from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
+
+from app.config import settings
+from app.git.service import (
+    _get_repo,
+    get_file_at_commit,
+    get_git_diff,
+    get_git_log,
+    init_git,
+    create_git_commit,
+    revert_git_commit,
+)
 
 
 async def get_auth_headers(client: AsyncClient) -> dict:
@@ -162,3 +174,105 @@ async def test_revert_commit(client: AsyncClient):
     )
     assert response.status_code == 200
     assert response.json()["message"] == "回滚成功"
+
+
+# ========== 边界情况测试 ==========
+
+
+class TestGitEdgeCases:
+    def test_get_repo_nonexistent(self):
+        result = _get_repo("nonexistent-kb-xyz123")
+        assert result is None
+
+    def test_init_git_nonexistent_path(self):
+        result = init_git("nonexistent-kb-xyz123")
+        assert result is False
+
+    def test_init_git_idempotent(self, tmp_path):
+        kb_id = f"git-idem-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            assert init_git(kb_id) is True
+            assert init_git(kb_id) is True
+        finally:
+            import shutil
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+    def test_get_log_no_repo(self):
+        result = get_git_log("nonexistent-kb-xyz123")
+        assert result == []
+
+    def test_get_diff_no_repo(self):
+        result = get_git_diff("nonexistent-kb-xyz123")
+        assert result == ""
+
+    def test_revert_nonexistent_hash(self, tmp_path):
+        kb_id = f"git-revert-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            init_git(kb_id)
+            result = revert_git_commit(kb_id, "0000000000000000000000000000000000000000")
+            assert result is False
+        finally:
+            import shutil
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+    def test_revert_no_repo(self):
+        result = revert_git_commit("nonexistent-kb-xyz123", "abc123")
+        assert result is False
+
+    def test_create_commit_no_file(self, tmp_path):
+        kb_id = f"git-nofile-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            init_git(kb_id)
+            result = create_git_commit(kb_id, "test msg", "nonexistent.md")
+            assert result is None
+        finally:
+            import shutil
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+    def test_get_file_at_commit_no_repo(self):
+        result = get_file_at_commit("nonexistent-kb-xyz123", "abc123", "test.md")
+        assert result is None
+
+    def test_get_file_at_commit_nonexistent_file(self):
+        kb_id = f"git-fac-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            init_git(kb_id)
+            result = get_file_at_commit(kb_id, "HEAD", "nonexistent.md")
+            assert result is None
+        finally:
+            import shutil
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+
+class TestGitLogWithFilePath:
+    def test_log_with_file_filter(self):
+        kb_id = f"git-logfile-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            init_git(kb_id)
+            (kb_path / "a.md").write_text("a", encoding="utf-8")
+            create_git_commit(kb_id, "add a", "a.md")
+            (kb_path / "b.md").write_text("b", encoding="utf-8")
+            create_git_commit(kb_id, "add b", "b.md")
+
+            log_a = get_git_log(kb_id, 10, file_path="a.md")
+            assert len(log_a) == 1
+            log_all = get_git_log(kb_id, 10)
+            assert len(log_all) == 2
+        finally:
+            import shutil
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)

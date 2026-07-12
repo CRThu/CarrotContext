@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useKnowledgeStore } from '../stores/knowledgeStore'
+import { useToastStore } from '../stores/toastStore'
 import { api } from '../lib/api'
 import FileTree from '../components/FileTree/FileTree'
 import MarkdownViewer from '../components/MarkdownViewer/MarkdownViewer'
 import CodeEditor from '../components/CodeEditor/CodeEditor'
 import GitHistory from '../components/GitHistory/GitHistory'
-import type { FileContent } from '../types'
-import { ArrowLeft, Save, X, Pencil, History, FolderTree, Settings } from 'lucide-react'
+import GitDiffViewer from '../components/GitHistory/GitDiffViewer'
+import type { FileContent, GitCommit } from '../types'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { ArrowLeft, Save, X, Pencil, History, FolderTree, Settings, Upload } from 'lucide-react'
 import { ThemeToggle } from '../components/ThemeToggle'
 
 type SidebarTab = 'files' | 'history'
@@ -21,12 +24,32 @@ export default function KnowledgePage() {
   const [fileContent, setFileContent] = useState<FileContent | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
+  const [isDirty, setIsDirty] = useState(false)
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('files')
+  const [selectedCommit, setSelectedCommit] = useState<GitCommit | null>(null)
+  const [diffContent, setDiffContent] = useState<{ oldContent: string; newContent: string; fileName: string } | null>(null)
+  const [loadingDiff, setLoadingDiff] = useState(false)
 
   const currentKnowledge = useKnowledgeStore((state) => state.currentKnowledge)
   const setCurrentKnowledge = useKnowledgeStore((state) => state.setCurrentKnowledge)
   const fileTree = useKnowledgeStore((state) => state.fileTree)
   const setFileTree = useKnowledgeStore((state) => state.setFileTree)
+  const addToast = useToastStore((s) => s.addToast)
+  const dirtyRef = useRef(false)
+
+  useEffect(() => {
+    dirtyRef.current = isDirty
+  }, [isDirty])
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) {
+        e.preventDefault()
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
 
   useEffect(() => {
     if (id) {
@@ -57,27 +80,46 @@ export default function KnowledgePage() {
 
   const handleFileSelect = async (path: string) => {
     if (!id) return
+    if (isDirty && !confirm('有未保存的修改，是否放弃？')) return
     setSelectedFile(path)
+    setIsEditing(false)
+    setIsDirty(false)
+    setSelectedCommit(null)
+    setDiffContent(null)
+    setSidebarTab('files')
     try {
       const content = await api.knowledge.file(id, path)
       setFileContent(content)
       setEditContent(content.content)
-      setIsEditing(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载文件失败')
     }
   }
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!id || !selectedFile) return
     try {
       await api.knowledge.updateFile(id, selectedFile, editContent)
       setIsEditing(false)
+      setIsDirty(false)
+      addToast({ type: 'success', message: '保存成功' })
       handleFileSelect(selectedFile)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
+      addToast({ type: 'error', message: err instanceof Error ? err.message : '保存失败' })
     }
+  }, [id, selectedFile, editContent])
+
+  const handleCancel = () => {
+    if (isDirty && !confirm('有未保存的修改，是否放弃？')) return
+    setIsEditing(false)
+    setIsDirty(false)
+    if (fileContent) setEditContent(fileContent.content)
   }
+
+  useKeyboardShortcuts({
+    onSave: isEditing ? handleSave : undefined,
+    onEscape: isEditing ? handleCancel : undefined,
+  })
 
   const handleMove = async (sourcePath: string, destPath: string) => {
     if (!id) return
@@ -88,9 +130,54 @@ export default function KnowledgePage() {
         setSelectedFile(null)
         setFileContent(null)
       }
+      addToast({ type: 'success', message: '移动成功' })
     } catch (err) {
-      setError(err instanceof Error ? err.message : '移动失败')
+      addToast({ type: 'error', message: err instanceof Error ? err.message : '移动失败' })
     }
+  }
+
+  const handleSelectCommit = async (commit: GitCommit) => {
+    if (!id || !selectedFile) return
+    setSelectedCommit(commit)
+    setLoadingDiff(true)
+    try {
+      const result = await api.git.fileAtCommit(id, commit.hash, selectedFile)
+      setDiffContent({
+        oldContent: result.content,
+        newContent: fileContent?.content || '',
+        fileName: selectedFile,
+      })
+    } catch {
+      const diffResult = await api.git.diff(id, selectedFile, commit.hash)
+      setDiffContent({
+        oldContent: diffResult.diff,
+        newContent: '',
+        fileName: selectedFile,
+      })
+    } finally {
+      setLoadingDiff(false)
+    }
+  }
+
+  const handleUpload = async () => {
+    if (!id) return
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.onchange = async () => {
+      const files = input.files
+      if (!files) return
+      for (const file of Array.from(files)) {
+        try {
+          await api.knowledge.uploadFile(id, file)
+          addToast({ type: 'success', message: `上传 ${file.name} 成功` })
+        } catch (err) {
+          addToast({ type: 'error', message: err instanceof Error ? err.message : `上传 ${file.name} 失败` })
+        }
+      }
+      loadTree(id)
+    }
+    input.click()
   }
 
   const isMarkdown = (path: string) => path.endsWith('.md') || path.endsWith('.markdown')
@@ -136,11 +223,13 @@ export default function KnowledgePage() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
-      {/* Header */}
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-700 z-40 flex-shrink-0">
         <div className="px-4 py-3 flex items-center gap-4">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => {
+              if (isDirty && !confirm('有未保存的修改，是否放弃？')) return
+              navigate('/')
+            }}
             className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -157,33 +246,42 @@ export default function KnowledgePage() {
             <Settings className="w-3.5 h-3.5" />
             属性
           </button>
-          {selectedFile && sidebarTab === 'files' && (
+          {sidebarTab === 'files' && (
             <div className="flex items-center gap-2 ml-auto">
-              {isEditing ? (
-                <>
+              <button
+                onClick={handleUpload}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                上传
+              </button>
+              {selectedFile && (
+                isEditing ? (
+                  <>
+                    <button
+                      onClick={handleSave}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all shadow-sm"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      保存
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      取消
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={handleSave}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all shadow-sm"
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all"
                   >
-                    <Save className="w-3.5 h-3.5" />
-                    保存
+                    <Pencil className="w-3.5 h-3.5" />
+                    编辑
                   </button>
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    取消
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  编辑
-                </button>
+                )
               )}
             </div>
           )}
@@ -191,11 +289,8 @@ export default function KnowledgePage() {
         </div>
       </header>
 
-      {/* Two-column layout */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
         <aside className="w-72 bg-white dark:bg-slate-800 border-r border-slate-200/60 dark:border-slate-700 flex flex-col overflow-hidden flex-shrink-0">
-          {/* Tab buttons */}
           <div className="flex border-b border-slate-100 dark:border-slate-700">
             <button
               onClick={() => setSidebarTab('files')}
@@ -221,7 +316,6 @@ export default function KnowledgePage() {
             </button>
           </div>
 
-          {/* Tab content */}
           <div className="flex-1 overflow-hidden">
             {sidebarTab === 'files' ? (
               <div className="pt-4 px-3 h-full overflow-y-auto scrollbar-thin">
@@ -234,36 +328,35 @@ export default function KnowledgePage() {
                   selectedPath={selectedFile}
                   knowledgeId={id}
                   onMove={handleMove}
+                  canWrite={true}
+                  onRefresh={() => id && loadTree(id)}
                 />
               </div>
             ) : (
               <div className="h-full">
-                {id && <GitHistory knowledgeId={id} />}
+                {id && <GitHistory knowledgeId={id} selectedFile={selectedFile} onSelectCommit={handleSelectCommit} />}
               </div>
             )}
           </div>
         </aside>
 
-        {/* Canvas */}
         <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900">
           <div className="max-w-4xl mx-auto p-8 h-full">
-            {/* Breadcrumb */}
             {selectedFile && sidebarTab === 'files' && (
               <nav className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 mb-6 animate-fade-in">
                 <span className="text-slate-600 dark:text-slate-300 font-medium">{currentKnowledge?.name}</span>
                 {selectedFile.split('/').map((part, i, arr) => (
                   <span key={i} className="flex items-center gap-1.5">
                     <span className="text-slate-300 dark:text-slate-600">/</span>
-                    <span className={i === arr.length - 1 ? 'text-slate-600 dark:text-slate-300 font-medium' : ''}>
-                      {part}
-                    </span>
+                    <span className={i === arr.length - 1 ? 'text-slate-600 dark:text-slate-300 font-medium' : ''}>{part}</span>
                   </span>
                 ))}
               </nav>
             )}
 
-            {/* Content Canvas Card */}
-            <div className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-8 ${isEditing && sidebarTab === 'files' ? 'h-[calc(100vh-180px)]' : 'min-h-[calc(100vh-180px)]'}`}>
+            <div className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-8 ${
+              (isEditing && sidebarTab === 'files') || sidebarTab === 'history' ? 'h-[calc(100vh-180px)]' : 'min-h-[calc(100vh-180px)]'
+            }`}>
               {error && (
                 <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl text-sm animate-slide-up">
                   {error}
@@ -283,7 +376,7 @@ export default function KnowledgePage() {
                 ) : isEditing ? (
                   <CodeEditor
                     content={editContent}
-                    onChange={setEditContent}
+                    onChange={(v) => { setEditContent(v); setIsDirty(true) }}
                     language={isMarkdown(selectedFile) ? 'markdown' : getLanguageId(selectedFile)}
                     height="100%"
                   />
@@ -302,13 +395,32 @@ export default function KnowledgePage() {
                   </div>
                 ) : null
               )}
+
               {sidebarTab === 'history' && (
-                <div className="text-center py-12">
-                  <History className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                  <p className="text-sm text-slate-400 dark:text-slate-500">
-                    在左侧选择查看提交历史
-                  </p>
-                </div>
+                loadingDiff ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-blue-500 rounded-full animate-spin" />
+                  </div>
+                ) : diffContent ? (
+                  <GitDiffViewer
+                    oldContent={diffContent.oldContent}
+                    newContent={diffContent.newContent}
+                    fileName={diffContent.fileName}
+                  />
+                ) : selectedCommit ? (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-slate-400 dark:text-slate-500">
+                      请先在文件 tab 选择一个文件，再查看该提交的差异
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <History className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                    <p className="text-sm text-slate-400 dark:text-slate-500">
+                      在左侧选择查看提交历史
+                    </p>
+                  </div>
+                )
               )}
             </div>
           </div>

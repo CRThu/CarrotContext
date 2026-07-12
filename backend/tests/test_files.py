@@ -15,6 +15,7 @@ from app.files.service import (
     get_binary_content,
     upload_file,
     move_file,
+    delete_file,
     BINARY_EXTENSIONS,
 )
 
@@ -82,35 +83,33 @@ def auth_header(token: str) -> dict:
 class TestBinaryDetection:
     def test_binary_extension_png(self, setup_test_kb):
         kb_id, kb_path = setup_test_kb
-        # Create a fake PNG file
         png_path = kb_path / "test.png"
         png_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
-        assert is_binary_file(f"{kb_id}/test.png") is True
+        assert is_binary_file(kb_id, "test.png") is True
 
     def test_binary_extension_pdf(self, setup_test_kb):
         kb_id, kb_path = setup_test_kb
         pdf_path = kb_path / "test.pdf"
         pdf_path.write_bytes(b"%PDF-1.4" + b"\x00" * 100)
-        assert is_binary_file(f"{kb_id}/test.pdf") is True
+        assert is_binary_file(kb_id, "test.pdf") is True
 
     def test_text_file_not_binary(self, setup_test_kb):
         kb_id, kb_path = setup_test_kb
         txt_path = kb_path / "test.md"
         txt_path.write_text("# Hello World\nThis is text.", encoding="utf-8")
-        assert is_binary_file(f"{kb_id}/test.md") is False
+        assert is_binary_file(kb_id, "test.md") is False
 
     def test_python_file_not_binary(self, setup_test_kb):
         kb_id, kb_path = setup_test_kb
         py_path = kb_path / "test.py"
         py_path.write_text("print('hello')", encoding="utf-8")
-        assert is_binary_file(f"{kb_id}/test.py") is False
+        assert is_binary_file(kb_id, "test.py") is False
 
     def test_binary_content_detection(self, setup_test_kb):
         kb_id, kb_path = setup_test_kb
-        # File with non-UTF8 bytes
         bin_path = kb_path / "data.bin"
         bin_path.write_bytes(bytes(range(256)))
-        assert is_binary_file(f"{kb_id}/data.bin") is True
+        assert is_binary_file(kb_id, "data.bin") is True
 
 
 # ========== Upload Tests ==========
@@ -368,3 +367,82 @@ async def test_create_dir_api_exists(client: AsyncClient, setup_test_kb, auth_to
         headers=auth_header(auth_token),
     )
     assert resp.status_code == 400
+
+
+# ========== Delete File Tests ==========
+
+
+class TestDeleteFile:
+    def test_delete_normal_file(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        (kb_path / "to_delete.md").write_text("x", encoding="utf-8")
+        result = delete_file(kb_id, "to_delete.md")
+        assert result is True
+        assert not (kb_path / "to_delete.md").exists()
+
+    def test_delete_nonexistent(self, setup_test_kb):
+        kb_id, _ = setup_test_kb
+        result = delete_file(kb_id, "ghost.md")
+        assert result is False
+
+    def test_delete_manifest_rejected(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        result = delete_file(kb_id, ".manifest.json")
+        assert result is False
+
+    def test_delete_directory(self, setup_test_kb):
+        kb_id, kb_path = setup_test_kb
+        (kb_path / "dir_to_delete").mkdir()
+        (kb_path / "dir_to_delete" / "file.md").write_text("x", encoding="utf-8")
+        result = delete_file(kb_id, "dir_to_delete")
+        assert result is True
+        assert not (kb_path / "dir_to_delete").exists()
+
+    def test_delete_traversal_rejected(self, setup_test_kb):
+        kb_id, _ = setup_test_kb
+        result = delete_file(kb_id, "../../../etc/passwd")
+        assert result is False
+
+
+@pytest.mark.anyio
+async def test_delete_file_api(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, kb_path = setup_test_kb
+    (kb_path / "del_me.md").write_text("delete me", encoding="utf-8")
+    resp = await client.delete(
+        f"/api/knowledge/{kb_id}/files/del_me.md",
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 200
+    assert not (kb_path / "del_me.md").exists()
+
+
+@pytest.mark.anyio
+async def test_delete_file_api_not_found(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, _ = setup_test_kb
+    resp = await client.delete(
+        f"/api/knowledge/{kb_id}/files/ghost.md",
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_delete_file_api_traversal(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, _ = setup_test_kb
+    resp = await client.delete(
+        f"/api/knowledge/{kb_id}/files/../../../etc/passwd",
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code in (400, 404)
+
+
+@pytest.mark.anyio
+async def test_upload_api_too_large(client: AsyncClient, setup_test_kb, auth_token: str):
+    kb_id, _ = setup_test_kb
+    large_content = b"x" * (11 * 1024 * 1024)
+    resp = await client.post(
+        f"/api/knowledge/{kb_id}/files/upload",
+        files={"file": ("large.bin", large_content, "application/octet-stream")},
+        headers=auth_header(auth_token),
+    )
+    assert resp.status_code == 413

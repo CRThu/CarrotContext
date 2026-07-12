@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from app.auth.router import router as auth_router
 from app.config import ensure_directories, settings
@@ -10,15 +11,18 @@ from app.files.router import router as files_router
 from app.git.router import router as git_router
 from app.knowledge.router import router as knowledge_router
 from app.lock.router import router as lock_router
+from app.log import setup_logging
 from app.search.router import router as search_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
+    setup_logging()
+    logger.info("Starting {} v{}", settings.APP_NAME, settings.APP_VERSION)
     ensure_directories()
     await init_db()
     yield
+    logger.info("Shutting down")
 
 
 app = FastAPI(
@@ -27,7 +31,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS配置
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -36,7 +39,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
 app.include_router(auth_router, prefix="/api/auth", tags=["认证"])
 app.include_router(
     knowledge_router, prefix="/api/knowledge", tags=["知识管理"]
@@ -50,7 +52,6 @@ app.include_router(
     git_router, prefix="/api/git", tags=["Git版本控制"]
 )
 
-# MCP路由
 if settings.MCP_ENABLED:
     from app.mcp.server import mcp_app
 

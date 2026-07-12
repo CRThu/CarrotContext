@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 
 from app.auth.router import get_current_user, require_admin
 from app.knowledge.access_rules import (
@@ -106,6 +107,7 @@ async def delete_knowledge_api(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="知识库不存在",
         )
+    logger.info("KB deleted: {} by {}", knowledge_id, current_user["username"])
     return {"message": "删除成功"}
 
 

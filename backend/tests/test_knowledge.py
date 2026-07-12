@@ -1,7 +1,15 @@
+import shutil
+import sqlite3
 import uuid
+from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+
+from app.config import settings
+from app.database import DATABASE_PATH
+from app.git.service import init_git
+from app.knowledge.service import create_knowledge, remove_knowledge
 
 
 async def get_auth_headers(client: AsyncClient) -> dict:
@@ -152,3 +160,93 @@ async def test_file_operations(client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert "# Test" in data["content"]
+
+
+# ========== 自动 Git 初始化测试 ==========
+
+
+class TestAutoGitInit:
+    def test_create_knowledge_auto_inits_git(self):
+        kb_id = f"auto-git-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            create_knowledge(kb_id, "Auto Git", "", [], "admin")
+            assert (kb_path / ".git").exists()
+        finally:
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+    def test_create_knowledge_has_git_dir(self):
+        kb_id = f"auto-git2-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            create_knowledge(kb_id, "Git Dir", "", [], "admin")
+            git_dir = kb_path / ".git"
+            assert git_dir.is_dir()
+            assert (git_dir / "config").exists()
+        finally:
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+
+# ========== KB 删除清理测试 ==========
+
+
+class TestDeleteKnowledgeCleanup:
+    def test_delete_cleans_access_rules(self):
+        kb_id = f"del-clean-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(DATABASE_PATH))
+            try:
+                conn.execute(
+                    "INSERT INTO access_rules (knowledge_id, group_id, access_level) VALUES (?, NULL, 'read')",
+                    (kb_id,),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            remove_knowledge(kb_id)
+
+            conn = sqlite3.connect(str(DATABASE_PATH))
+            try:
+                cursor = conn.execute("SELECT COUNT(*) FROM access_rules WHERE knowledge_id = ?", (kb_id,))
+                assert cursor.fetchone()[0] == 0
+            finally:
+                conn.close()
+        finally:
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+    def test_delete_cleans_search_index(self):
+        kb_id = f"del-clean2-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(DATABASE_PATH))
+            try:
+                conn.execute(
+                    "INSERT INTO search_index (knowledge_id, file_path, title, tags, summary, content) VALUES (?, '', ?, '', '', '')",
+                    (kb_id, kb_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            remove_knowledge(kb_id)
+
+            conn = sqlite3.connect(str(DATABASE_PATH))
+            try:
+                cursor = conn.execute("SELECT COUNT(*) FROM search_index WHERE knowledge_id = ?", (kb_id,))
+                assert cursor.fetchone()[0] == 0
+            finally:
+                conn.close()
+        finally:
+            if kb_path.exists():
+                shutil.rmtree(kb_path, ignore_errors=True)
+
+    def test_delete_nonexistent_returns_false(self):
+        result = remove_knowledge("nonexistent-del-xyz123")
+        assert result is False

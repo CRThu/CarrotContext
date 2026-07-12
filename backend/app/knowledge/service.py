@@ -1,6 +1,7 @@
-from pathlib import Path
+from loguru import logger
 
 from app.config import get_knowledge_path
+from app.git.service import init_git
 from app.knowledge.manifest import (
     create_manifest,
     delete_knowledge,
@@ -8,6 +9,7 @@ from app.knowledge.manifest import (
     load_manifest,
     update_manifest,
 )
+
 
 def list_knowledge() -> list[dict]:
     return list_all_manifests()
@@ -29,6 +31,8 @@ def create_knowledge(
     if knowledge_path.exists():
         raise ValueError("知识库已存在")
     knowledge_path.mkdir(parents=True, exist_ok=True)
+    init_git(knowledge_id)
+    logger.info("KB created: {} by {}", knowledge_id, created_by)
     return create_manifest(knowledge_id, name, description, tags, created_by, category)
 
 

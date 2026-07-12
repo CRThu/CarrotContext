@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from git import InvalidGitRepositoryError, Repo
+from loguru import logger
 
 from app.config import get_knowledge_path
 
@@ -27,18 +28,23 @@ def init_git(knowledge_id: str) -> bool:
     repo = Repo.init(knowledge_path)
     repo.config_writer().set_value("user", "email", "carrotcontext@local").release()
     repo.config_writer().set_value("user", "name", "CarrotContext").release()
+    logger.info("Git initialized: KB {}", knowledge_id)
     return True
 
 
-def get_git_log(knowledge_id: str, limit: int = 10) -> list[dict]:
+def get_git_log(knowledge_id: str, limit: int = 10, file_path: str | None = None) -> list[dict]:
     """获取Git提交历史"""
     repo = _get_repo(knowledge_id)
     if not repo:
+        logger.warning("Git repo not found: KB {}", knowledge_id)
         return []
 
-    commits = []
     try:
-        for commit in repo.iter_commits(max_count=limit):
+        commits = []
+        kwargs = {"max_count": limit}
+        if file_path:
+            kwargs["paths"] = [file_path]
+        for commit in repo.iter_commits(**kwargs):
             commits.append({
                 "hash": commit.hexsha,
                 "author": commit.author.name,
@@ -46,10 +52,12 @@ def get_git_log(knowledge_id: str, limit: int = 10) -> list[dict]:
                 "date": commit.committed_datetime.isoformat(),
                 "message": commit.message.strip(),
             })
+        logger.debug("Git log: KB {}, {} commits", knowledge_id, len(commits))
+        return commits
     except (ValueError, TypeError):
-        # 空仓库没有提交历史
-        pass
-    return commits
+        return []
+    finally:
+        repo.close()
 
 
 def get_git_diff(
@@ -64,19 +72,33 @@ def get_git_diff(
 
     try:
         if commit:
-            # 比较指定提交与当前工作区
             diff = repo.commit(commit).diff(None)
             if file_path:
                 diff = [d for d in diff if d.a_path == file_path or d.b_path == file_path]
             return "\n".join(str(d) for d in diff)
         else:
-            # 比较暂存区与工作区
             diff = repo.index.diff(None)
             if file_path:
                 diff = [d for d in diff if d.a_path == file_path or d.b_path == file_path]
             return "\n".join(str(d) for d in diff)
     except Exception:
         return ""
+    finally:
+        repo.close()
+
+
+def get_file_at_commit(knowledge_id: str, commit_hash: str, file_path: str) -> str | None:
+    """获取指定提交的文件内容"""
+    repo = _get_repo(knowledge_id)
+    if not repo:
+        return None
+    try:
+        commit = repo.commit(commit_hash)
+        return commit.tree[file_path].data_stream.read().decode("utf-8")
+    except (KeyError, Exception):
+        return None
+    finally:
+        repo.close()
 
 
 def create_git_commit(
@@ -94,7 +116,6 @@ def create_git_commit(
 
     try:
         if file_path:
-            # 检查文件是否存在
             full_path = get_knowledge_path(knowledge_id) / file_path
             if not full_path.exists():
                 return None
@@ -103,8 +124,12 @@ def create_git_commit(
             repo.index.add(".")
 
         repo.index.commit(message)
-    except Exception:
+        logger.info("Git committed in KB {}, msg={}", knowledge_id, message)
+    except Exception as e:
+        logger.error("Git commit failed: KB {}, {}", knowledge_id, e)
         return None
+    finally:
+        repo.close()
 
     log = get_git_log(knowledge_id, 1)
     return log[0] if log else None
@@ -119,14 +144,17 @@ def revert_git_commit(
         return False
 
     try:
-        # 使用 git 命令行执行 revert
         repo.git.revert("--no-edit", commit_hash)
+        logger.info("Git reverted: {} in KB {}", commit_hash[:8], knowledge_id)
         return True
     except Exception:
-        # 如果 revert 失败，尝试回退到该提交
         try:
             repo.git.checkout(commit_hash, "--", ".")
             repo.index.commit(f"Revert to {commit_hash[:8]}")
+            logger.info("Git reverted (checkout): {} in KB {}", commit_hash[:8], knowledge_id)
             return True
         except Exception:
+            logger.error("Git revert failed: KB {}, {}", knowledge_id, commit_hash)
             return False
+    finally:
+        repo.close()

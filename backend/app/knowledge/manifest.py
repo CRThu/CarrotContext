@@ -1,8 +1,13 @@
 import json
+import shutil
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+from loguru import logger
+
 from app.config import get_knowledge_path, settings
+from app.database import DATABASE_PATH
 
 
 def get_manifest_path(knowledge_id: str) -> Path:
@@ -13,15 +18,23 @@ def load_manifest(knowledge_id: str) -> dict | None:
     manifest_path = get_manifest_path(knowledge_id)
     if not manifest_path.exists():
         return None
-    with open(manifest_path, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+        logger.warning("Manifest corrupted: {}, skipped ({})", manifest_path, e)
+        return None
 
 
 def save_manifest(knowledge_id: str, manifest: dict):
     manifest_path = get_manifest_path(knowledge_id)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    try:
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        logger.error("Manifest save failed: {}, {}", manifest_path, e)
+        raise ValueError(f"保存元数据失败: {e}")
 
 
 def create_manifest(
@@ -72,14 +85,32 @@ def list_all_manifests() -> list[dict]:
                 manifest = load_manifest(item.name)
                 if manifest:
                     manifests.append(manifest)
+    logger.debug("Loaded {} knowledge bases", len(manifests))
     return manifests
+
+
+def _cleanup_db_records(knowledge_id: str):
+    """同步清理 SQLite 中的孤儿记录"""
+    try:
+        conn = sqlite3.connect(str(DATABASE_PATH))
+        try:
+            conn.execute("DELETE FROM access_rules WHERE knowledge_id = ?", (knowledge_id,))
+            conn.execute("DELETE FROM search_index WHERE knowledge_id = ?", (knowledge_id,))
+            conn.commit()
+        except Exception as e:
+            logger.warning("DB cleanup failed for KB {}: {}", knowledge_id, e)
+            conn.rollback()
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error("DB connection failed during cleanup for KB {}: {}", knowledge_id, e)
 
 
 def delete_knowledge(knowledge_id: str) -> bool:
     knowledge_path = get_knowledge_path(knowledge_id)
     if not knowledge_path.exists():
         return False
-    import shutil
-
     shutil.rmtree(knowledge_path)
+    _cleanup_db_records(knowledge_id)
+    logger.info("KB deleted: {}", knowledge_id)
     return True

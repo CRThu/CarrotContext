@@ -1,6 +1,8 @@
 import shutil
 from pathlib import Path
 
+from loguru import logger
+
 from app.config import get_knowledge_path
 
 # Known binary file extensions
@@ -13,9 +15,18 @@ BINARY_EXTENSIONS = {
 }
 
 
+def _safe_path(knowledge_id: str, file_path: str) -> Path | None:
+    """验证文件路径不越出知识库目录。返回安全路径，越界则返回 None。"""
+    base = get_knowledge_path(knowledge_id).resolve()
+    full = (base / file_path).resolve()
+    if not str(full).startswith(str(base)):
+        return None
+    return full
+
+
 def get_file_tree(knowledge_id: str, path: str = "") -> list[dict]:
-    base_path = get_knowledge_path(knowledge_id) / path
-    if not base_path.exists():
+    base_path = _safe_path(knowledge_id, path)
+    if base_path is None or not base_path.exists():
         return []
 
     tree = []
@@ -34,8 +45,9 @@ def get_file_tree(knowledge_id: str, path: str = "") -> list[dict]:
 
 
 def get_file_content(knowledge_id: str, file_path: str) -> dict | None:
-    full_path = get_knowledge_path(knowledge_id) / file_path
-    if not full_path.exists() or full_path.is_dir():
+    full_path = _safe_path(knowledge_id, file_path)
+    if full_path is None or not full_path.exists() or full_path.is_dir():
+        logger.warning("File not found: KB {}/{}", knowledge_id, file_path)
         return None
 
     stat = full_path.stat()
@@ -49,46 +61,69 @@ def get_file_content(knowledge_id: str, file_path: str) -> dict | None:
 
 
 def update_file_content(knowledge_id: str, file_path: str, content: str) -> bool:
-    full_path = get_knowledge_path(knowledge_id) / file_path
-    if not full_path.parent.exists():
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_text(content, encoding="utf-8")
-    return True
+    full_path = _safe_path(knowledge_id, file_path)
+    if full_path is None:
+        return False
+    try:
+        if not full_path.parent.exists():
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(content, encoding="utf-8")
+        return True
+    except OSError as e:
+        logger.error("Write failed: KB {}/{} - {}", knowledge_id, file_path, e)
+        return False
 
 
 def create_directory(knowledge_id: str, dir_path: str) -> bool:
-    full_path = get_knowledge_path(knowledge_id) / dir_path
-    if full_path.exists():
+    full_path = _safe_path(knowledge_id, dir_path)
+    if full_path is None or full_path.exists():
         return False
     full_path.mkdir(parents=True, exist_ok=True)
     return True
 
 
 def upload_file(knowledge_id: str, file_path: str, content: bytes) -> bool:
-    full_path = get_knowledge_path(knowledge_id) / file_path
-    if not full_path.parent.exists():
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_bytes(content)
+    full_path = _safe_path(knowledge_id, file_path)
+    if full_path is None:
+        return False
+    try:
+        if not full_path.parent.exists():
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_bytes(content)
+        return True
+    except OSError as e:
+        logger.error("Upload failed: KB {}/{} - {}", knowledge_id, file_path, e)
+        return False
+
+
+def delete_file(knowledge_id: str, file_path: str) -> bool:
+    full_path = _safe_path(knowledge_id, file_path)
+    if full_path is None or not full_path.exists():
+        return False
+    if file_path == ".manifest.json":
+        return False
+    if full_path.is_dir():
+        shutil.rmtree(full_path)
+    else:
+        full_path.unlink()
+    logger.info("File deleted: KB {}/{}", knowledge_id, file_path)
     return True
 
 
 def move_file(knowledge_id: str, source_path: str, dest_path: str) -> bool:
     """Move or rename a file/directory within a knowledge base."""
-    source = get_knowledge_path(knowledge_id) / source_path
-    dest = get_knowledge_path(knowledge_id) / dest_path
+    source = _safe_path(knowledge_id, source_path)
+    dest = _safe_path(knowledge_id, dest_path)
 
-    if not source.exists():
+    if source is None or dest is None or not source.exists():
         return False
 
-    # Prevent moving .manifest.json
     if source.name == ".manifest.json" or dest.name == ".manifest.json":
         return False
 
-    # If dest is an existing directory, move source inside it
     if dest.exists() and dest.is_dir():
         dest = dest / source.name
 
-    # Create parent directory if needed
     if not dest.parent.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
 
@@ -96,15 +131,14 @@ def move_file(knowledge_id: str, source_path: str, dest_path: str) -> bool:
     return True
 
 
-def is_binary_file(file_path: str) -> bool:
+def is_binary_file(knowledge_id: str, file_path: str) -> bool:
     """Check if a file is binary based on extension or content"""
     ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
     if ext in BINARY_EXTENSIONS:
         return True
 
-    # Try to read as UTF-8
-    full_path = get_knowledge_path(file_path.split("/")[0]) / "/".join(file_path.split("/")[1:])
-    if not full_path.exists():
+    full_path = _safe_path(knowledge_id, file_path)
+    if full_path is None or not full_path.exists():
         return False
 
     try:
@@ -118,7 +152,8 @@ def is_binary_file(file_path: str) -> bool:
 
 def get_binary_content(knowledge_id: str, file_path: str) -> bytes | None:
     """Get raw binary content of a file"""
-    full_path = get_knowledge_path(knowledge_id) / file_path
-    if not full_path.exists() or full_path.is_dir():
+    full_path = _safe_path(knowledge_id, file_path)
+    if full_path is None or not full_path.exists() or full_path.is_dir():
+        logger.warning("Binary file not found: KB {}/{}", knowledge_id, file_path)
         return None
     return full_path.read_bytes()

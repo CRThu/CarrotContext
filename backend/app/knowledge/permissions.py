@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, Request, status
+from loguru import logger
 
 from app.auth.router import get_current_user
 from app.auth.service import get_user_by_id
@@ -24,7 +25,6 @@ async def check_access(user_id: int | None, knowledge_id: str, required: str) ->
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         db.row_factory = aiosqlite.Row
 
-        # Check user's groups for this KB
         if user_id is not None:
             max_level = 0
             has_group_rule = False
@@ -45,12 +45,16 @@ async def check_access(user_id: int | None, knowledge_id: str, required: str) ->
                         max_level = level
 
             if has_group_rule:
-                return max_level >= required_level
+                granted = max_level >= required_level
+                if granted:
+                    logger.debug("Access GRANTED: user={}, kb={}, level={}", user_id, knowledge_id, required)
+                else:
+                    logger.warning("Access DENIED: user={}, kb={}, required={}", user_id, knowledge_id, required)
+                return granted
 
-            # No group rules → no access (no default write)
+            logger.warning("Access DENIED: user={}, kb={}, required={} (no group rules)", user_id, knowledge_id, required)
             return False
 
-        # Check anonymous rule (group_id IS NULL) - only for unauthenticated users
         async with db.execute(
             """
             SELECT access_level FROM access_rules

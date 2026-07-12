@@ -44,7 +44,7 @@ def search_metadata(query: str, limit: int = 20) -> list[dict]:
 
 
 def _search_with_grep(query: str, search_path: Path, limit: int) -> list[dict]:
-    """使用 grep 命令搜索文件内容（跨平台 fallback）"""
+    """使用 Python 正则搜索文件内容（跨平台 fallback）"""
     import re
 
     results = []
@@ -60,12 +60,17 @@ def _search_with_grep(query: str, search_path: Path, limit: int) -> list[dict]:
 
     try:
         for item in search_path.rglob("*"):
-            if not item.is_file() or len(results) >= limit:
+            if len(results) >= limit:
                 break
+            if not item.is_file():
+                continue
             if item.suffix.lower() not in text_extensions:
                 continue
-            if ".git" in item.parts:
+            try:
+                item.relative_to(search_path / ".git")
                 continue
+            except ValueError:
+                pass
 
             try:
                 content = item.read_text(encoding="utf-8", errors="ignore")
@@ -149,16 +154,19 @@ def _load_knowledge_manifests() -> list[tuple[str, str, list[str], str, str]]:
         if not knowledge_dir.is_dir():
             continue
         manifest_path = knowledge_dir / ".manifest.json"
-        if manifest_path.exists():
-            with open(manifest_path, encoding="utf-8") as f:
-                manifest = json.load(f)
-            entries.append((
-                knowledge_dir.name,
-                manifest.get("name", ""),
-                manifest.get("tags", []),
-                manifest.get("summary", ""),
-                manifest.get("description", ""),
-            ))
+        try:
+            if manifest_path.exists():
+                with open(manifest_path, encoding="utf-8") as f:
+                    manifest = json.load(f)
+                entries.append((
+                    knowledge_dir.name,
+                    manifest.get("name", ""),
+                    manifest.get("tags", []),
+                    manifest.get("summary", ""),
+                    manifest.get("description", ""),
+                ))
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            continue
     return entries
 
 

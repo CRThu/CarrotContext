@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, status
 from fastapi.responses import Response
+from loguru import logger
 
-from app.auth.router import get_current_user
 from app.knowledge.models import FileContent, FileMoveRequest, TreeNode
 from app.knowledge.permissions import require_access
 from app.files.service import (
     create_directory,
+    delete_file,
     get_binary_content,
     get_file_content,
     get_file_tree,
@@ -17,7 +18,6 @@ from app.files.service import (
 
 router = APIRouter()
 
-# Maximum upload size: 10MB
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 
 
@@ -36,7 +36,6 @@ async def get_raw_file_api(
     file_path: str,
     current_user: dict = Depends(require_access("read")),
 ):
-    """Download a binary file"""
     content = get_binary_content(knowledge_id, file_path)
     if content is None:
         raise HTTPException(
@@ -44,7 +43,6 @@ async def get_raw_file_api(
             detail="文件不存在",
         )
 
-    # Determine content type from extension
     ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
     content_types = {
         "png": "image/png",
@@ -100,6 +98,20 @@ async def update_file_api(
     return {"message": "更新成功"}
 
 
+@router.delete("/{knowledge_id}/files/{file_path:path}")
+async def delete_file_api(
+    knowledge_id: str,
+    file_path: str,
+    current_user: dict = Depends(require_access("write")),
+):
+    if not delete_file(knowledge_id, file_path):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="删除失败",
+        )
+    return {"message": "删除成功"}
+
+
 @router.post("/{knowledge_id}/dirs")
 async def create_dir_api(
     knowledge_id: str,
@@ -135,9 +147,9 @@ async def upload_file_api(
     path: str = "",
     current_user: dict = Depends(require_access("write")),
 ):
-    """Upload a file to the knowledge base"""
     content = await file.read()
     if len(content) > MAX_UPLOAD_SIZE:
+        logger.warning("Upload rejected: file too large ({} bytes)", len(content))
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"文件大小超过限制（最大 {MAX_UPLOAD_SIZE // (1024 * 1024)}MB）",
@@ -149,4 +161,5 @@ async def upload_file_api(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="上传失败",
         )
+    logger.info("File uploaded: KB {}/{} ({} bytes)", knowledge_id, file_path, len(content))
     return {"message": "上传成功", "path": file_path}

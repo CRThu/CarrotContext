@@ -74,6 +74,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ source_path: sourcePath, dest_path: destPath }),
       }),
+    deleteFile: (id: string, path: string) =>
+      request<{ message: string }>(`/knowledge/${id}/files/${path}`, {
+        method: 'DELETE',
+      }),
     uploadFile: async (id: string, file: File, path: string = '') => {
       const token = useAuthStore.getState().token
       const formData = new FormData()
@@ -114,8 +118,13 @@ export const api = {
       request<LockStatus>(`/lock/status?knowledge_id=${knowledgeId}&file_path=${filePath}`),
   },
   git: {
-    log: (id: string, limit?: number) =>
-      request<GitCommit[]>(`/git/${id}/log${limit ? `?limit=${limit}` : ''}`),
+    log: (id: string, limit?: number, filePath?: string) => {
+      const params = new URLSearchParams()
+      if (limit) params.append('limit', String(limit))
+      if (filePath) params.append('file_path', filePath)
+      const query = params.toString()
+      return request<GitCommit[]>(`/git/${id}/log${query ? `?${query}` : ''}`)
+    },
     diff: (id: string, filePath?: string, commit?: string) => {
       const params = new URLSearchParams()
       if (filePath) params.append('file_path', filePath)
@@ -125,10 +134,21 @@ export const api = {
         `/git/${id}/diff${query ? `?${query}` : ''}`
       )
     },
+    fileAtCommit: (id: string, commit: string, path: string) =>
+      request<{ content: string }>(`/git/${id}/file-at-commit?commit=${commit}&path=${encodeURIComponent(path)}`),
     commit: (id: string, message: string, filePath?: string) =>
       request<GitCommit>(`/git/${id}/commit`, {
         method: 'POST',
         body: JSON.stringify({ message, file_path: filePath }),
+      }),
+    revert: (id: string, commitHash: string) =>
+      request<{ message: string }>(`/git/${id}/revert`, {
+        method: 'POST',
+        body: JSON.stringify({ commit_hash: commitHash }),
+      }),
+    init: (id: string) =>
+      request<{ message: string }>(`/git/${id}/init`, {
+        method: 'POST',
       }),
   },
   search: {

@@ -140,9 +140,11 @@ class TestSearchWithGrep:
         kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
         try:
             create_knowledge(kb_id, "grep跳过", "desc", [], "tester")
-            git_dir = kb_path / ".git" / "objects"
-            git_dir.mkdir(parents=True)
-            (git_dir / "test.txt").write_text("should be skipped", encoding="utf-8")
+            # .git is already created by create_knowledge auto-init
+            # Write a file inside .git to verify it's skipped
+            git_objects = kb_path / ".git" / "objects"
+            if git_objects.exists():
+                (git_objects / "test.txt").write_text("should be skipped", encoding="utf-8")
 
             results = _search_with_grep("skipped", kb_path, limit=10)
             assert results == []
@@ -780,3 +782,88 @@ async def test_search_requires_auth(client):
         params={"q": "test", "mode": "all"},
     )
     assert response.status_code in (401, 403)
+
+
+# ========== 损坏 Manifest 防御测试 ==========
+
+
+class TestCorruptedManifestDefense:
+    def test_load_manifests_skips_corrupted(self):
+        kb_id_ok = f"search-ok-{uuid.uuid4().hex[:8]}"
+        kb_id_bad = f"search-bad-{uuid.uuid4().hex[:8]}"
+        kb_path_ok = settings.KNOWLEDGE_BASE_PATH / kb_id_ok
+        kb_path_bad = settings.KNOWLEDGE_BASE_PATH / kb_id_bad
+        try:
+            kb_path_ok.mkdir(parents=True, exist_ok=True)
+            (kb_path_ok / ".manifest.json").write_text(
+                json.dumps({"name": "OK", "tags": [], "summary": "", "description": ""}),
+                encoding="utf-8",
+            )
+            kb_path_bad.mkdir(parents=True, exist_ok=True)
+            (kb_path_bad / ".manifest.json").write_text("CORRUPTED!!!", encoding="utf-8")
+
+            from app.search.service import _load_knowledge_manifests
+            entries = _load_knowledge_manifests()
+            ids = [e[0] for e in entries]
+            assert kb_id_ok in ids
+            assert kb_id_bad not in ids
+        finally:
+            _force_rmtree(kb_path_ok)
+            _force_rmtree(kb_path_bad)
+
+    def test_load_manifests_skips_empty_file(self):
+        kb_id = f"search-empty-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            (kb_path / ".manifest.json").write_text("", encoding="utf-8")
+
+            from app.search.service import _load_knowledge_manifests
+            entries = _load_knowledge_manifests()
+            ids = [e[0] for e in entries]
+            assert kb_id not in ids
+        finally:
+            _force_rmtree(kb_path)
+
+    def test_load_manifests_skips_non_utf8(self):
+        kb_id = f"search-binary-{uuid.uuid4().hex[:8]}"
+        kb_path = settings.KNOWLEDGE_BASE_PATH / kb_id
+        try:
+            kb_path.mkdir(parents=True, exist_ok=True)
+            (kb_path / ".manifest.json").write_bytes(b"\x89\x8a\x8b\xff\xfe")
+
+            from app.search.service import _load_knowledge_manifests
+            entries = _load_knowledge_manifests()
+            ids = [e[0] for e in entries]
+            assert kb_id not in ids
+        finally:
+            _force_rmtree(kb_path)
+
+    def test_rebuild_with_corrupted_manifest(self):
+        kb_id_ok = f"rebuild-ok-{uuid.uuid4().hex[:8]}"
+        kb_id_bad = f"rebuild-bad-{uuid.uuid4().hex[:8]}"
+        kb_path_ok = settings.KNOWLEDGE_BASE_PATH / kb_id_ok
+        kb_path_bad = settings.KNOWLEDGE_BASE_PATH / kb_id_bad
+        try:
+            kb_path_ok.mkdir(parents=True, exist_ok=True)
+            (kb_path_ok / ".manifest.json").write_text(
+                json.dumps({"name": "OK KB", "tags": ["test"], "summary": "sum", "description": "desc"}),
+                encoding="utf-8",
+            )
+            kb_path_bad.mkdir(parents=True, exist_ok=True)
+            (kb_path_bad / ".manifest.json").write_text("{bad json", encoding="utf-8")
+
+            rebuild_search_index()
+
+            import sqlite3
+            conn = sqlite3.connect(str(DATABASE_PATH))
+            try:
+                cursor = conn.execute("SELECT knowledge_id FROM search_index WHERE knowledge_id = ?", (kb_id_ok,))
+                assert cursor.fetchone() is not None
+                cursor = conn.execute("SELECT knowledge_id FROM search_index WHERE knowledge_id = ?", (kb_id_bad,))
+                assert cursor.fetchone() is None
+            finally:
+                conn.close()
+        finally:
+            _force_rmtree(kb_path_ok)
+            _force_rmtree(kb_path_bad)

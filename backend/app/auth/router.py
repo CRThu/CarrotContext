@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from loguru import logger
 
 from app.auth.models import (
     GroupCreate,
@@ -62,11 +63,13 @@ async def require_admin(current_user: dict = Depends(get_current_user)):
 async def register(user: UserCreate):
     existing_user = await get_user_by_username(user.username)
     if existing_user:
+        logger.warning("Registration failed: {} already exists", user.username)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户名已存在",
         )
     created_user = await create_user(user.username, user.email, user.password)
+    logger.info("User registered: {}", user.username)
     return created_user
 
 
@@ -74,6 +77,7 @@ async def register(user: UserCreate):
 async def login(user: LoginRequest):
     authenticated_user = await authenticate_user(user.username, user.password)
     if not authenticated_user:
+        logger.warning("Login failed: {}", user.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
@@ -84,6 +88,7 @@ async def login(user: LoginRequest):
             "user_id": authenticated_user["id"],
         }
     )
+    logger.info("User logged in: {}", user.username)
     return Token(access_token=access_token)
 
 
